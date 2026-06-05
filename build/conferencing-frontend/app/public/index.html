@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DVRTC Conferencing1 - BluePill Meetings</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="home-page">
+      <header class="meet-header home-header">
+        <a class="meet-brand" href="/" aria-label="BluePill Meetings home">
+          <span class="meet-logo" aria-hidden="true"></span>
+          <span class="meet-brand-text">
+            <span>BluePill Meetings</span>
+            <small>Damn Vulnerable Real-Time Communications - conferencing1</small>
+          </span>
+        </a>
+        <div class="home-header-meta">
+          <span class="home-date" id="homeDate"></span>
+          <a class="dvrtc-link" href="https://github.com/EnableSecurity/DVRTC">DVRTC GitHub</a>
+        </div>
+      </header>
+
+      <section class="dvrtc-strip" aria-label="DVRTC lab notice">
+        <strong>DVRTC conferencing1 lab</strong>
+        <span>Intentionally vulnerable for education. Use dedicated lab hosts only.</span>
+        <a href="https://github.com/EnableSecurity/DVRTC">Documentation and exercises on GitHub</a>
+      </section>
+
+      <section class="home-hero">
+        <div class="home-copy">
+          <h1>Very secure video conferencing for everyone</h1>
+          <p class="lede">Create a meeting link or enter a room code to join a conference.</p>
+          <div class="meet-actions">
+            <button id="showCreateButton" type="button" class="primary-pill">New meeting</button>
+            <form id="joinForm" class="join-pill">
+              <input name="displayName" required autocomplete="name" maxlength="48" placeholder="Your name">
+              <input name="code" required autocomplete="off" placeholder="Enter a code">
+              <button type="submit">Join</button>
+            </form>
+          </div>
+        </div>
+
+        <aside class="home-card" aria-label="Meeting illustration">
+          <div class="home-illustration" aria-hidden="true">
+            <span class="person person-one"></span>
+            <span class="person person-two"></span>
+            <span class="link-mark">🔗</span>
+          </div>
+          <h2>Get a link that you can share</h2>
+          <p>Click <strong>New meeting</strong> to create a room code for people you want to meet with.</p>
+        </aside>
+      </section>
+
+      <section id="createPanel" class="create-drawer" hidden>
+        <form id="createForm" class="create-card">
+          <div>
+            <p class="eyebrow">new meeting</p>
+            <h2>Create a meeting</h2>
+          </div>
+          <label>
+            Your name
+            <input name="displayName" required autocomplete="name" maxlength="48" placeholder="Ada">
+          </label>
+          <div class="actions compact-actions">
+            <button type="submit">Create room</button>
+            <button id="hideCreateButton" type="button" class="secondary-button">Cancel</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="createdPanel" class="create-drawer" hidden>
+        <div class="create-card created-panel">
+          <p class="eyebrow">room created</p>
+          <h2 id="createdTitle">Meeting code ready</h2>
+          <div class="share-grid">
+            <label>
+              Room link
+              <input id="createdLink" readonly>
+            </label>
+            <label>
+              Meeting code
+              <input id="createdCode" readonly>
+            </label>
+          </div>
+          <div class="actions">
+            <a id="enterCreatedRoom" href="/">Enter room</a>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="/home.js"></script>
+  </body>
+</html>

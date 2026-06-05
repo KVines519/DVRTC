@@ -14,12 +14,13 @@ DVRTC packages a vulnerable RTC deployment together with scenario documentation,
 
 ## Current Scope
 
-The repository currently ships two scenarios:
+The repository currently ships three scenarios:
 
 - `pbx1` is the Kamailio/Asterisk/rtpengine scenario.
 - `pbx2` is the OpenSIPS/FreeSWITCH/rtpproxy scenario.
+- `conferencing1` is the WebRTC Conferencing Platform 1 scenario.
 
-Run only one scenario at a time on a given host. Both scenarios rely on host networking for the core RTC services and reuse overlapping ports, so `pbx1` and `pbx2` cannot run concurrently on the same machine.
+Run only one scenario at a time on a given host. The scenarios rely on host networking for the core RTC services and may reuse overlapping ports, so they cannot run concurrently on the same machine.
 
 Scenario summaries:
 
@@ -37,7 +38,13 @@ Scenario summaries:
 - Exercises: 8 step-by-step `pbx2` exercise stubs cover the current attack paths. The bundled smoke/regression suites remain the source of truth for reproducibility. The MySQL-backed SQLi/XSS surface from `pbx1` is intentionally not part of `pbx2`.
 - Start: `./scripts/compose.sh --scenario pbx2 up -d`
 
-Both scenarios use pinned runtime images from the compose manifest set in `compose/base.yml`, `compose/pbx1.yml`, `compose/pbx2.yml`, and `VERSION`. For local rebuilds, see [docs/development.md](docs/development.md).
+### `conferencing1`
+
+- Stack: conferencing frontend/API and Janus WebRTC Server.
+- Focus: browser-based WebRTC conferencing behavior and Janus VideoRoom control paths.
+- Start: `./scripts/compose.sh --scenario conferencing1 up -d`
+
+All scenarios use pinned runtime images from the compose manifest set in `compose/base.yml`, the selected scenario file under `compose/`, and `VERSION`. For local rebuilds, see [docs/development.md](docs/development.md).
 
 Live deployments are currently available:
 
@@ -54,6 +61,7 @@ Start here for scenario-specific details:
 - [pbx2 Scenario Overview](docs/pbx2/overview.md)
 - [pbx2 Exercise Index](docs/pbx2/exercises/README.md)
 - [pbx2 Architecture](docs/pbx2/architecture.md)
+- [conferencing1 Scenario Overview](docs/conferencing1/overview.md)
 
 <p align="center">
   <a href="https://pbx1.dvrtc.net/"><img src="docs/assets/pbx1-homepage.png" width="45%" alt="pbx1 public deployment screenshot"></a>
@@ -83,10 +91,11 @@ If you are on macOS, use the Colima workflow in [docs/colima-setup.md](docs/coli
 
 Once the stack is up, you're ready to jump into the hands-on exercises in the [pbx1 Exercise Index](docs/pbx1/exercises/README.md).
 
-To start the `pbx2` scenario instead, use:
+To start another scenario instead, use:
 
 ```bash
 ./scripts/compose.sh --scenario pbx2 up -d
+./scripts/compose.sh --scenario conferencing1 up -d
 ```
 
 Equivalent raw Compose commands are:
@@ -94,10 +103,11 @@ Equivalent raw Compose commands are:
 ```bash
 docker compose --project-directory . -p dvrtc-pbx1 -f compose/base.yml -f compose/pbx1.yml up -d
 docker compose --project-directory . -p dvrtc-pbx2 -f compose/base.yml -f compose/pbx2.yml up -d
+docker compose --project-directory . -p dvrtc-conferencing1 -f compose/base.yml -f compose/conferencing1.yml up -d
 ```
 
 Plain `docker compose up -d` is not a valid scenario selector here. The base file at `compose/base.yml` only carries shared runner definitions, so it exits with `no service selected` unless you add a scenario file or use the wrapper.
-Do not start both raw scenario commands at the same time on the same host. `pbx1` and `pbx2` overlap on host-networked SIP, web, TURN, and RTP ports. The wrapper script handles this by stopping the other scenario before startup.
+Do not start multiple raw scenario commands at the same time on the same host. The scenarios use host networking and may overlap on exposed ports. The wrapper script handles this by stopping the other scenarios before startup.
 
 If you want publicly trusted certificates instead of self-signed lab certs, set `DOMAIN` and `EMAIL` in `.env` and use `./scripts/init-letsencrypt.sh` instead.
 
@@ -135,6 +145,7 @@ For a quick manual SIP check, register extension `1000` with password `1500` in 
 - [pbx1 Exercise Index](docs/pbx1/exercises/README.md) - current hands-on exercise set
 - [pbx2 Scenario Overview](docs/pbx2/overview.md) - current `pbx2` stack, attack paths, and exposed surfaces
 - [pbx2 Exercise Index](docs/pbx2/exercises/README.md) - current `pbx2` exercise stubs for all known scenario paths
+- [conferencing1 Scenario Overview](docs/conferencing1/overview.md) - current WebRTC conferencing stack and exposed surfaces
 - [Troubleshooting](docs/troubleshooting.md) - current repo-specific failure modes and diagnostics
 - [Development and Local Builds](docs/development.md) - maintainer rebuild workflow and platform constraints
 - [Contributing](CONTRIBUTING.md) - contribution expectations for this project

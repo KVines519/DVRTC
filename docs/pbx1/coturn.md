@@ -5,6 +5,7 @@
 `coturn` provides TURN/STUN support for the `pbx1` scenario. It is intentionally configured with weak credentials and a relay policy that denies all peers by default then allows back loopback, RFC 1918 ranges, and the host's own public IP, so the lab can demonstrate TURN relay abuse.
 
 - public listeners: `3478/TCP`, `3478/UDP`, and `5349/TCP` for TURN/TLS
+- `compose/pbx1.yml` sets `--listening-port=3478` and `--tls-listening-port=5349` explicitly so the TURN/TLS listener does not depend on image defaults
 - network mode: host
 - TLS material is read from `data/certs`
 - listeners are created for `127.0.0.1`, `PUBLIC_IPV4`, and optional `PUBLIC_IPV6`

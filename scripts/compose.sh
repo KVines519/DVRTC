@@ -11,11 +11,12 @@ SCENARIO=""
 usage() {
     cat <<'EOF'
 Usage:
-  ./scripts/compose.sh --scenario pbx1|pbx2 [docker compose args...]
+  ./scripts/compose.sh --scenario pbx1|pbx2|conferencing1 [docker compose args...]
 
 Examples:
   ./scripts/compose.sh --scenario pbx1 up -d
   ./scripts/compose.sh --scenario pbx2 up -d
+  ./scripts/compose.sh --scenario conferencing1 up -d
   ./scripts/compose.sh --scenario pbx1 ps
   ./scripts/compose.sh --scenario pbx2 logs opensips
 

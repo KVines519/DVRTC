@@ -82,7 +82,7 @@ Rules that matter for this repo:
 
 ### Certificates are missing or unusable
 
-Kamailio, Nginx, and coturn all expect TLS material under `data/certs/`.
+Kamailio, Nginx, coturn, the `conferencing1` frontend, and the one-off `conferencing1-attacker-console` HTTPS server all expect TLS material under `data/certs/`.
 
 For normal lab use:
 
@@ -159,7 +159,7 @@ Current repo-specific checks:
 ### Port conflicts
 
 DVRTC relies on host networking for the core RTC services. If you already have SIP, TURN, HTTP, HTTPS, or MySQL services running on the host, DVRTC may fail to bind.
-This also means `pbx1` and `pbx2` cannot run at the same time on the same host: the two scenarios reuse overlapping host ports and RTP ranges.
+This also means DVRTC scenarios cannot run at the same time on the same host: they may reuse overlapping host ports and RTP ranges.
 
 The most important ports are:
 
@@ -167,12 +167,14 @@ The most important ports are:
 - `5061` TCP for SIP/TLS (Kamailio)
 - `5090` TCP for SIP (Asterisk, Kamailio routes to this)
 - `8000` TCP for WS
-- `8443` TCP for WSS
+- `8443` TCP for WSS in `pbx1`/`pbx2`, and for the one-off `conferencing1-attacker-console` HTTPS server when launched
 - `3478` UDP/TCP for TURN/STUN
-- `80` and `443` TCP for Nginx
+- `80` and `443` TCP for Nginx in `pbx1`/`pbx2` or the conferencing frontend in `conferencing1`
 - `23306` TCP for MySQL by default
 - `10000-15000` UDP for Asterisk RTP
 - `35000-40000` UDP for rtpengine
+- `8088` and `8188` TCP for the `conferencing1` Janus APIs, bound to localhost on the DVRTC host
+- `40001-45000` UDP for `conferencing1` Janus RTP
 
 Quick checks:
 
@@ -182,7 +184,10 @@ sudo lsof -nP -i :5061
 sudo lsof -nP -i :3478
 sudo lsof -nP -i :80
 sudo lsof -nP -i :443
+sudo lsof -nP -i :8443
 sudo lsof -nP -i :23306
+sudo lsof -nP -i :8088
+sudo lsof -nP -i :8188
 ```
 
 ## Access Problems
@@ -233,6 +238,25 @@ curl -k "https://${PUBLIC_IPV4}/"
 ```
 
 If the advertised-address check fails, the problem is usually firewalling, a wrong `PUBLIC_IPV4`, or testing the wrong network namespace.
+
+### The `conferencing1` attacker console is not reachable
+
+Start it as a one-off attacker container and publish TCP `8443`:
+
+```bash
+./scripts/compose.sh --scenario conferencing1 run --rm \
+  -p 8443:8443 \
+  attacker conferencing1-attacker-console
+```
+
+The console should print the HTTPS URL to open from the user's computer. If the browser cannot connect:
+
+- verify the command is still running
+- verify TCP `8443` is open on the host firewall or cloud security group
+- verify no other service is already using `8443`
+- if self-signed certificates are in use, accept the browser certificate warning
+
+The attacker console is only the static operator UI. Its normal signaling target is the conferencing frontend WebSocket proxy at `/janus/<secret>`, not a public Janus WSS listener.
 
 ## Media, RTP, And TURN
 

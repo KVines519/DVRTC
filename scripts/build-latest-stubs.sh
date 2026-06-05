@@ -16,7 +16,8 @@ Usage:
   ./scripts/build-latest-stubs.sh [options]
 
 Options:
-  --scenario pbx1|pbx2   Build latest stubs for the selected scenario image set
+  --scenario pbx1|pbx2|conferencing1
+                         Build latest stubs for the selected scenario image set
   --image-prefix PREFIX  Tag stub images under PREFIX/<service>
                          Default: ghcr.io/enablesecurity/dvrtc
   --push                 Push images after building
@@ -65,6 +66,9 @@ case "$SCENARIO" in
         ;;
     pbx2)
         SERVICES="pbx2-freeswitch pbx2-rtpproxy pbx2-opensips"
+        ;;
+    conferencing1)
+        SERVICES="conferencing1-frontend conferencing1-janus conferencing1-bluepill-aiortc-bots"
         ;;
     *)
         echo "ERROR: Unknown scenario: $SCENARIO" >&2

@@ -11,6 +11,13 @@ if [ -z "${TARGET_INPUT}" ]; then
     exit 2
 fi
 
+if [ "${SCENARIO}" = "conferencing1" ]; then
+    exec env \
+        SCENARIO="${SCENARIO}" \
+        CONFERENCING_SKIP_LOCAL_JANUS=1 \
+        testing-run-all "${TARGET_INPUT}" "${TARGET_MYSQL_PORT}"
+fi
+
 exec env \
     SCENARIO="${SCENARIO}" \
     RUN_CALLGEN_CHECK=0 \

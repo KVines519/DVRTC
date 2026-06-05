@@ -1,6 +1,6 @@
 # Development and Local Builds
 
-This document covers maintainer-oriented local rebuild workflows. The default runtime path uses `compose/base.yml` together with a scenario file such as `compose/pbx1.yml` or `compose/pbx2.yml`, and published, versioned images remain the recommended path for normal lab usage.
+This document covers maintainer-oriented local rebuild workflows. The default runtime path uses `compose/base.yml` together with a scenario file such as `compose/pbx1.yml`, `compose/pbx2.yml`, or `compose/conferencing1.yml`, and published, versioned images remain the recommended path for normal lab usage.
 
 ## When To Use This
 
@@ -41,6 +41,8 @@ Rebuild the normal service set:
 ./scripts/dev-compose.sh --scenario pbx1 up -d
 ./scripts/dev-compose.sh --scenario pbx2 build
 ./scripts/dev-compose.sh --scenario pbx2 up -d
+./scripts/dev-compose.sh --scenario conferencing1 build
+./scripts/dev-compose.sh --scenario conferencing1 up -d
 ```
 
 Rebuild a single service:

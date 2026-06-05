@@ -1,0 +1,31 @@
+services:
+  conferencing-frontend:
+    build:
+      context: build/conferencing-frontend
+      args:
+        DVRTC_VERSION: ${DVRTC_VERSION:-dev}
+        DVRTC_SERVICE: conferencing1-frontend
+        VCS_REF: ${VCS_REF:-unknown}
+        DVRTC_SOURCE: ${DVRTC_SOURCE:-https://github.com/EnableSecurity/DVRTC}
+
+  janus:
+    build:
+      context: build/janus
+      args:
+        DVRTC_VERSION: ${DVRTC_VERSION:-dev}
+        DVRTC_SERVICE: conferencing1-janus
+        VCS_REF: ${VCS_REF:-unknown}
+        DVRTC_SOURCE: ${DVRTC_SOURCE:-https://github.com/EnableSecurity/DVRTC}
+
+  bluepill-bots:
+    build:
+      context: .
+      dockerfile: build/bluepill-aiortc-bots/Dockerfile
+      args:
+        DVRTC_VERSION: ${DVRTC_VERSION:-dev}
+        DVRTC_SERVICE: conferencing1-bluepill-aiortc-bots
+        VCS_REF: ${VCS_REF:-unknown}
+        DVRTC_SOURCE: ${DVRTC_SOURCE:-https://github.com/EnableSecurity/DVRTC}
+        BOT_AIORTC_VIDEO_WIDTH: ${BOT_AIORTC_VIDEO_WIDTH:-160}
+        BOT_AIORTC_VIDEO_HEIGHT: ${BOT_AIORTC_VIDEO_HEIGHT:-120}
+        BOT_AIORTC_VIDEO_FPS: ${BOT_AIORTC_VIDEO_FPS:-30}

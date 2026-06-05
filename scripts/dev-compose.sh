@@ -31,6 +31,8 @@ KNOWN_SERVICES=(
   baresip-digestleak-pbx2
   nginx-pbx2
   recordingscleaner
+  janus
+  conferencing-frontend
   certbot
   coturn
   testing
@@ -40,12 +42,13 @@ KNOWN_SERVICES=(
 usage() {
     cat <<'EOF'
 Usage:
-  ./scripts/dev-compose.sh [--scenario pbx1|pbx2] [docker compose args...]
+  ./scripts/dev-compose.sh [--scenario pbx1|pbx2|conferencing1] [docker compose args...]
 
 Examples:
   ./scripts/dev-compose.sh build
   ./scripts/dev-compose.sh --scenario pbx1 up -d
   ./scripts/dev-compose.sh --scenario pbx2 up -d
+  ./scripts/dev-compose.sh --scenario conferencing1 up -d
   ./scripts/dev-compose.sh --profile testing build testing attacker
 
 Defaults:
@@ -131,6 +134,17 @@ case "$SCENARIO" in
           baresip-callgen-pbx2
           baresip-digestleak-pbx2
           nginx-pbx2
+        )
+        ;;
+    conferencing1)
+        compose_resolve_scenario "$SCENARIO"
+        RUNTIME_SERVICES=(
+          conferencing-frontend
+          janus
+        )
+        BUILD_SERVICES=(
+          conferencing-frontend
+          janus
         )
         ;;
     *)

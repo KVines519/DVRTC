@@ -16,7 +16,8 @@ Usage:
   ./scripts/build-release-images.sh [options]
 
 Options:
-  --scenario pbx1|pbx2   Build the selected scenario image set
+  --scenario pbx1|pbx2|conferencing1
+                         Build the selected scenario image set
   --push                 Push images after building
   -h, --help             Show this help
 EOF
@@ -60,6 +61,11 @@ case "$SCENARIO" in
         SCENARIO_COMPOSE_FILE="$REPO_ROOT/compose/pbx2.yml"
         SCENARIO_DEV_COMPOSE_FILE="$REPO_ROOT/compose/dev.pbx2.yml"
         SERVICES="freeswitch rtpproxy opensips baresip-callgen-pbx2 baresip-digestleak-pbx2 nginx-pbx2"
+        ;;
+    conferencing1)
+        SCENARIO_COMPOSE_FILE="$REPO_ROOT/compose/conferencing1.yml"
+        SCENARIO_DEV_COMPOSE_FILE="$REPO_ROOT/compose/dev.conferencing1.yml"
+        SERVICES="conferencing-frontend janus bluepill-bots"
         ;;
     *)
         echo "ERROR: Unknown scenario: $SCENARIO" >&2

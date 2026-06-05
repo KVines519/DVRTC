@@ -2,12 +2,12 @@
 
 This document is the canonical entrypoint for DVRTC verification commands.
 
-The `testing` and `attacker` Compose services are one-off runner services. Prefer `./scripts/compose.sh --scenario ... run --rm ...` or the dedicated wrapper scripts; they are not part of the normal long-lived stack started by `./scripts/compose.sh --scenario pbx1 up -d` or `./scripts/compose.sh --scenario pbx2 up -d`. Both services bind-mount `./artifacts` to `/work` inside the container, so output files persist on the host.
+The `testing` and `attacker` Compose services are one-off runner services. Prefer `./scripts/compose.sh --scenario ... run --rm ...` or the dedicated wrapper scripts; they are not part of the normal long-lived stack started by commands such as `./scripts/compose.sh --scenario pbx1 up -d`, `./scripts/compose.sh --scenario pbx2 up -d`, or `./scripts/compose.sh --scenario conferencing1 up -d`. Both services bind-mount `./artifacts` to `/work` inside the container, so output files persist on the host.
 
 ## Prerequisites
 
-- Bring the main stack up first with `./scripts/compose.sh --scenario pbx1 up -d` or `./scripts/compose.sh --scenario pbx2 up -d`.
-- Run only one scenario at a time on the same host. `pbx1` and `pbx2` both use host networking for the core RTC services and will conflict on overlapping ports.
+- Bring the main stack up first with `./scripts/compose.sh --scenario pbx1 up -d`, `./scripts/compose.sh --scenario pbx2 up -d`, or `./scripts/compose.sh --scenario conferencing1 up -d`.
+- Run only one scenario at a time on the same host. The scenarios use host networking for the core RTC services and may conflict on overlapping ports.
 - Pull or otherwise reference the explicit release tag from `VERSION` when you are validating published images.
 - Build the local test images with `--profile testing` when you are working from the maintainer compose overlays. `./scripts/dev-compose.sh --scenario pbx1 --profile testing build testing attacker` is the preferred path. If you are using the published images from the runtime compose files, no build step is needed.
 - Use `127.0.0.1` for commands run inside the host-networked `testing` runner.
@@ -62,10 +62,10 @@ When rebuilding the test images locally, include the `testing` profile:
 - `testing-run-all`: full host-network verification from the host-networked `testing` runner.
 - `attacker-run-all`: remote-vantage verification from the bridge-networked `attacker` runner.
 
-The wrappers are thin entrypoints to the shared `testing` image used by both `testing` and `attacker`.
+The wrappers are thin entrypoints to the shared `testing` image used by both `testing` and `attacker`. The current regression wrappers cover `pbx1` and `pbx2`.
 
 Prefer the dedicated wrapper scripts for `testing-smoke`, `testing-run-all`, and `attacker-run-all`. They make the scenario explicit and are the clearest path for routine validation. If you do need the maintainer overlay path after local rebuilds, keep `--scenario` explicit on `./scripts/dev-compose.sh`; the wrapper now passes that scenario through to `testing` and `attacker` `run` commands automatically.
 
 Use `--scenario pbx2` when validating the OpenSIPS/FreeSWITCH/rtpproxy stack.
 
-Equivalent raw runtime commands are `docker compose --project-directory . -p dvrtc-pbx1 -f compose/base.yml -f compose/pbx1.yml up -d` and `docker compose --project-directory . -p dvrtc-pbx2 -f compose/base.yml -f compose/pbx2.yml up -d`, but they are mutually exclusive on the same host for the same reason.
+Equivalent raw runtime commands are `docker compose --project-directory . -p dvrtc-pbx1 -f compose/base.yml -f compose/pbx1.yml up -d`, `docker compose --project-directory . -p dvrtc-pbx2 -f compose/base.yml -f compose/pbx2.yml up -d`, and `docker compose --project-directory . -p dvrtc-conferencing1 -f compose/base.yml -f compose/conferencing1.yml up -d`, but they are mutually exclusive on the same host for the same reason.

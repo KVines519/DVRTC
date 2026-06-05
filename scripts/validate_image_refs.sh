@@ -20,7 +20,7 @@ Usage:
 
 Options:
   --compose-file PATH  Validate the specified compose file
-  --scenario NAME     Validate service references for pbx1 or pbx2
+  --scenario NAME     Validate service references for pbx1, pbx2, or conferencing1
   --version-file PATH  Read the expected DVRTC version from PATH
   -h, --help           Show this help
 EOF
@@ -148,6 +148,16 @@ baresip-callgen-c-pbx2
 baresip-digestleak-pbx2
 nginx-pbx2
 recordingscleaner
+testing
+attacker
+certbot
+"
+        ;;
+    conferencing1)
+        expected_services="
+conferencing-frontend
+janus
+bluepill-bots
 testing
 attacker
 certbot

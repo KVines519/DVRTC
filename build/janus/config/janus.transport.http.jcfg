@@ -1,0 +1,16 @@
+general: {
+    json = "indented"
+    base_path = "/janus"
+    http = true
+    port = __JANUS_HTTP_PORT__
+    ip = "127.0.0.1"
+
+    https = false
+}
+
+admin: {
+    admin_http = false
+}
+
+cors: {
+}

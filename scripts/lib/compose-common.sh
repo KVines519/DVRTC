@@ -15,19 +15,17 @@ compose_resolve_scenario() {
     local scenario="$1"
 
     case "$scenario" in
-        pbx1|pbx2)
+        pbx1|pbx2|conferencing1)
             SCENARIO="$scenario"
             SCENARIO_COMPOSE_FILE="$COMPOSE_DIR/${scenario}.yml"
             SCENARIO_DEV_COMPOSE_FILE="$COMPOSE_DIR/dev.${scenario}.yml"
             PROJECT_NAME="dvrtc-${scenario}"
-            if [ "$scenario" = "pbx1" ]; then
-                OTHER_SCENARIO="pbx2"
-            else
-                OTHER_SCENARIO="pbx1"
-            fi
-            OTHER_PROJECT_NAME="dvrtc-${OTHER_SCENARIO}"
-            OTHER_COMPOSE_FILE="$COMPOSE_DIR/${OTHER_SCENARIO}.yml"
-            OTHER_SCENARIO_DEV_COMPOSE_FILE="$COMPOSE_DIR/dev.${OTHER_SCENARIO}.yml"
+            OTHER_SCENARIOS=""
+            for candidate in pbx1 pbx2 conferencing1; do
+                if [ "$candidate" != "$scenario" ]; then
+                    OTHER_SCENARIOS="${OTHER_SCENARIOS} ${candidate}"
+                fi
+            done
             ;;
         *)
             echo "ERROR: Unknown scenario: $scenario" >&2
@@ -80,14 +78,6 @@ compose_append_remove_orphans_for_up() {
 
 compose_cleanup_other_scenarios() {
     local include_dev="${1:-0}"
-    local other_compose_cmd=(
-        docker compose
-        --env-file "$ENV_FILE"
-        --project-directory "$PROJECT_DIRECTORY"
-        -p "$OTHER_PROJECT_NAME"
-        -f "$BASE_COMPOSE_FILE"
-        -f "$OTHER_COMPOSE_FILE"
-    )
     local legacy_current_compose_cmd=(
         docker compose
         --env-file "$ENV_FILE"
@@ -96,22 +86,49 @@ compose_cleanup_other_scenarios() {
         -f "$BASE_COMPOSE_FILE"
         -f "$SCENARIO_COMPOSE_FILE"
     )
-    local legacy_other_compose_cmd=(
-        docker compose
-        --env-file "$ENV_FILE"
-        --project-directory "$PROJECT_DIRECTORY"
-        -p "dvrtc"
-        -f "$BASE_COMPOSE_FILE"
-        -f "$OTHER_COMPOSE_FILE"
-    )
+    local other
+    local other_compose_file
+    local other_dev_compose_file
+    local other_compose_cmd
 
     if [ "$include_dev" = "1" ]; then
-        other_compose_cmd+=(-f "$BASE_DEV_COMPOSE_FILE" -f "$OTHER_SCENARIO_DEV_COMPOSE_FILE")
         legacy_current_compose_cmd+=(-f "$BASE_DEV_COMPOSE_FILE" -f "$SCENARIO_DEV_COMPOSE_FILE")
-        legacy_other_compose_cmd+=(-f "$BASE_DEV_COMPOSE_FILE" -f "$OTHER_SCENARIO_DEV_COMPOSE_FILE")
     fi
 
-    "${other_compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
+    for other in $OTHER_SCENARIOS; do
+        other_compose_file="$COMPOSE_DIR/${other}.yml"
+        other_dev_compose_file="$COMPOSE_DIR/dev.${other}.yml"
+        other_compose_cmd=(
+            docker compose
+            --env-file "$ENV_FILE"
+            --project-directory "$PROJECT_DIRECTORY"
+            -p "dvrtc-${other}"
+            -f "$BASE_COMPOSE_FILE"
+            -f "$other_compose_file"
+        )
+        if [ "$include_dev" = "1" ]; then
+            other_compose_cmd+=(-f "$BASE_DEV_COMPOSE_FILE" -f "$other_dev_compose_file")
+        fi
+
+        "${other_compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
+    done
+
     "${legacy_current_compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
-    "${legacy_other_compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
+    for other in $OTHER_SCENARIOS; do
+        other_compose_file="$COMPOSE_DIR/${other}.yml"
+        other_dev_compose_file="$COMPOSE_DIR/dev.${other}.yml"
+        other_compose_cmd=(
+            docker compose
+            --env-file "$ENV_FILE"
+            --project-directory "$PROJECT_DIRECTORY"
+            -p "dvrtc"
+            -f "$BASE_COMPOSE_FILE"
+            -f "$other_compose_file"
+        )
+        if [ "$include_dev" = "1" ]; then
+            other_compose_cmd+=(-f "$BASE_DEV_COMPOSE_FILE" -f "$other_dev_compose_file")
+        fi
+
+        "${other_compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
+    done
 }

@@ -65,6 +65,7 @@ ARG WEBSOCKETS_VERSION=16.0
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        openssl \
         nmap \
         netcat-openbsd \
         inetutils-telnet \
@@ -100,6 +101,7 @@ COPY --from=sqlmap-builder /opt/sqlmap /opt/sqlmap
 WORKDIR /opt/testing
 
 COPY scripts/ /opt/testing/scripts/
+COPY web/ /opt/testing/web/
 COPY run-all.sh /usr/local/bin/testing-run-all
 COPY attacker-run-all.sh /usr/local/bin/attacker-run-all
 COPY smoke.sh /usr/local/bin/testing-smoke
@@ -115,7 +117,8 @@ RUN chmod +x /usr/local/bin/testing-run-all /usr/local/bin/attacker-run-all /usr
     && ln -sf /opt/testing/scripts/sqli.py /usr/local/bin/sqli \
     && ln -sf /opt/testing/scripts/freeswitch-lua-sqli.py /usr/local/bin/freeswitch-lua-sqli \
     && ln -sf /opt/testing/scripts/sip-sqlmap-harness.py /usr/local/bin/sip-sqlmap-harness \
-    && ln -sf /opt/testing/scripts/xss.py /usr/local/bin/xss
+    && ln -sf /opt/testing/scripts/xss.py /usr/local/bin/xss \
+    && ln -sf /opt/testing/scripts/conferencing1-attacker-console.py /usr/local/bin/conferencing1-attacker-console
 
 RUN john --list=formats 2>/dev/null | grep -q "SIP" \
     && command -v sipvicious_svwar \
@@ -140,6 +143,8 @@ RUN john --list=formats 2>/dev/null | grep -q "SIP" \
     && command -v freeswitch-lua-sqli \
     && command -v sip-sqlmap-harness \
     && command -v xss \
+    && command -v conferencing1-attacker-console \
+    && test -f /opt/testing/web/conferencing1-attacker/index.html \
     && command -v kamcmd \
     && command -v baresip \
     && python3 -c "import scapy" \

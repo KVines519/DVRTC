@@ -1,0 +1,3882 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Janus Operator Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-solid: #040804;
+        --panel: rgba(2, 18, 6, 0.72);
+        --panel-hi: rgba(4, 26, 10, 0.84);
+        --phosphor: #00ff66;
+        --phosphor-bright: #6effa0;
+        --phosphor-dim: #7dffad;
+        --phosphor-faint: #4fbd73;
+        --amber: #ffb000;
+        --amber-dim: #7a5400;
+        --line: rgba(0, 255, 102, 0.22);
+        --line-hot: rgba(0, 255, 102, 0.55);
+        --danger: var(--amber);
+        --field-bg: #020a04;
+        --field-ink: var(--phosphor-bright);
+        --inverse-ink: #021006;
+        --glow: 0 0 8px rgba(0, 255, 102, 0.55), 0 0 22px rgba(0, 255, 102, 0.22);
+        --rain-opacity: 0.28;
+        --scanlines: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 2px, rgba(0, 0, 0, 0.28) 3px, rgba(0, 0, 0, 0) 4px);
+        --vignette: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, 0.82) 100%);
+        --overlay-blend: multiply;
+      }
+
+      body[data-theme="light"] {
+        color-scheme: light;
+        --bg-solid: #f2fff5;
+        --panel: rgba(242, 255, 246, 0.84);
+        --panel-hi: rgba(224, 255, 234, 0.9);
+        --phosphor: #008f3a;
+        --phosphor-bright: #003d19;
+        --phosphor-dim: #087333;
+        --phosphor-faint: #459d61;
+        --amber: #9b5f00;
+        --amber-dim: #6a4500;
+        --line: rgba(0, 143, 58, 0.32);
+        --line-hot: rgba(0, 143, 58, 0.72);
+        --field-bg: rgba(250, 255, 251, 0.86);
+        --field-ink: #003d19;
+        --inverse-ink: #f5fff7;
+        --glow: 0 0 7px rgba(0, 143, 58, 0.24), 0 0 18px rgba(0, 255, 102, 0.16);
+        --rain-opacity: 0.34;
+        --scanlines: repeating-linear-gradient(0deg, rgba(0, 143, 58, 0) 0, rgba(0, 143, 58, 0) 2px, rgba(0, 143, 58, 0.11) 3px, rgba(0, 143, 58, 0) 4px);
+        --vignette: radial-gradient(ellipse at center, rgba(242, 255, 245, 0) 55%, rgba(0, 143, 58, 0.18) 100%);
+        --overlay-blend: multiply;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        min-height: 100%;
+        overflow: hidden;
+      }
+
+      body {
+        margin: 0;
+        color: var(--phosphor-bright);
+        background:
+          radial-gradient(circle at 18% 8%, rgba(0, 255, 102, 0.13), transparent 28%),
+          radial-gradient(circle at 78% 18%, rgba(255, 176, 0, 0.08), transparent 24%),
+          linear-gradient(135deg, rgba(0, 255, 102, 0.04), transparent 38%),
+          var(--bg-solid);
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 15px;
+        line-height: 1.55;
+      }
+
+      #rain,
+      .hud-backdrop,
+      .hud-sweep {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      #rain {
+        opacity: var(--rain-opacity);
+      }
+
+      .hud-backdrop {
+        opacity: 0.34;
+        background:
+          linear-gradient(rgba(0, 255, 102, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0, 255, 102, 0.08) 1px, transparent 1px);
+        background-size: 52px 52px;
+        mask-image: radial-gradient(ellipse at center, #000 0 52%, transparent 78%);
+      }
+
+      .hud-sweep {
+        opacity: 0.18;
+        background: linear-gradient(112deg, transparent 0 44%, rgba(0, 255, 102, 0.5) 48%, transparent 52% 100%);
+        transform: translateX(-120%);
+        animation: sweep 7.5s linear infinite;
+      }
+
+      @keyframes sweep {
+        to { transform: translateX(120%); }
+      }
+
+      body[data-link="live"] .hud-sweep {
+        opacity: 0.3;
+        animation-duration: 4.5s;
+      }
+
+      body[data-link="fault"] .hud-sweep {
+        background: linear-gradient(112deg, transparent 0 44%, rgba(255, 176, 0, 0.65) 48%, transparent 52% 100%);
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 9998;
+        pointer-events: none;
+        background: var(--scanlines);
+        mix-blend-mode: var(--overlay-blend);
+      }
+
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        pointer-events: none;
+        background: var(--vignette);
+        animation: flicker 6.5s infinite steps(60);
+      }
+
+      @keyframes flicker {
+        0%, 100% { opacity: 0.92; }
+        47% { opacity: 0.92; }
+        48% { opacity: 0.78; }
+        49% { opacity: 0.95; }
+        77% { opacity: 0.88; }
+        78% { opacity: 1; }
+      }
+
+      .statusbar {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        flex-wrap: wrap;
+        width: min(1180px, calc(100% - 52px));
+        margin: 0 auto;
+        border-bottom: 1px solid var(--line);
+        color: var(--phosphor-bright);
+        font-size: 11.5px;
+        letter-spacing: 0.14em;
+        padding: 8px 0;
+        text-transform: uppercase;
+      }
+
+      .statusbar .live {
+        color: var(--phosphor);
+        text-shadow: var(--glow);
+      }
+
+      .status-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .theme-toggle,
+      .trace-toggle {
+        min-height: 34px;
+        border: 1px solid var(--line-hot);
+        background: rgba(0, 255, 102, 0.06);
+        color: var(--phosphor-bright);
+        cursor: pointer;
+        font: inherit;
+        padding: 0;
+        text-transform: uppercase;
+      }
+
+      .theme-toggle {
+        width: 34px;
+      }
+
+      .trace-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 104px;
+        padding: 0 10px;
+        letter-spacing: 0.16em;
+      }
+
+      .trace-toggle[aria-pressed="true"] {
+        background: rgba(0, 255, 102, 0.16);
+        box-shadow: var(--glow);
+      }
+
+      .theme-toggle::before,
+      .trace-toggle::before {
+        content: "";
+      }
+
+      .theme-toggle svg,
+      .trace-toggle svg {
+        display: block;
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: square;
+        stroke-linejoin: miter;
+        stroke-width: 1.7;
+      }
+
+      .trace-toggle svg {
+        width: 21px;
+        height: 21px;
+        filter: drop-shadow(0 0 6px rgba(0, 255, 102, 0.55));
+      }
+
+      .blink {
+        animation: blink 1.06s steps(2) infinite;
+      }
+
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+      }
+
+      .shell {
+        position: relative;
+        z-index: 1;
+        width: min(1180px, calc(100% - 52px));
+        margin: 0 auto;
+        padding: 46px 0 80px;
+      }
+
+      .hero {
+        margin-bottom: 30px;
+      }
+
+      .eyebrow {
+        margin: 0 0 14px;
+        color: var(--phosphor-dim);
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.34em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        content: "// ";
+        color: var(--phosphor-faint);
+      }
+
+      h1,
+      h2,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 0;
+        color: var(--phosphor-bright);
+        font-family: "VT323", "JetBrains Mono", monospace;
+        font-size: clamp(56px, 9vw, 116px);
+        font-weight: 400;
+        letter-spacing: 0.01em;
+        line-height: 0.86;
+        text-shadow: var(--glow);
+        text-transform: uppercase;
+        animation: titleflick 9s infinite;
+      }
+
+      @keyframes titleflick {
+        0%, 100%, 40%, 42%, 70% { opacity: 1; }
+        41% { opacity: 0.6; }
+        71% { opacity: 0.84; }
+      }
+
+      h2 {
+        margin: 0 0 6px;
+        color: var(--phosphor-bright);
+        font-family: "VT323", "JetBrains Mono", monospace;
+        font-size: 30px;
+        font-weight: 400;
+        line-height: 1;
+        text-shadow: var(--glow);
+      }
+
+      .lede {
+        max-width: 720px;
+        margin-top: 18px;
+        color: var(--phosphor-dim);
+      }
+
+      .lede::before {
+        content: "> ";
+        color: var(--phosphor);
+      }
+
+      .hint,
+      label,
+      small {
+        color: var(--phosphor-dim);
+      }
+
+      .hint {
+        margin-top: 14px;
+        font-size: 13px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 22px;
+        margin-bottom: 22px;
+      }
+
+      .panel {
+        position: relative;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        backdrop-filter: blur(2px);
+        padding: 26px 26px 28px;
+        opacity: 0;
+        transform: translateY(14px);
+        animation: rise 0.5s ease-out forwards;
+      }
+
+      @keyframes rise {
+        to { opacity: 1; transform: none; }
+      }
+
+      .panel::before,
+      .panel::after {
+        content: "";
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        border: 1px solid var(--line-hot);
+      }
+
+      .panel::before {
+        top: -1px;
+        left: -1px;
+        border-right: 0;
+        border-bottom: 0;
+      }
+
+      .panel::after {
+        right: -1px;
+        bottom: -1px;
+        border-top: 0;
+        border-left: 0;
+      }
+
+      .panel .eyebrow {
+        color: var(--phosphor);
+        font-size: 11px;
+        letter-spacing: 0.26em;
+        margin-bottom: 6px;
+        text-shadow: var(--glow);
+      }
+
+      .panel .eyebrow::before {
+        content: "[ ";
+      }
+
+      .panel .eyebrow::after {
+        content: " ]";
+      }
+
+      .stack,
+      .room-list,
+      .participant-list,
+      .media-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .room-list,
+      .participant-list,
+      .media-grid {
+        margin-top: 16px;
+      }
+
+      .media-grid {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      .media-tile {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: var(--field-bg);
+        color: var(--field-ink);
+      }
+
+      .media-tile.is-selected {
+        border-color: var(--line-hot);
+        box-shadow: var(--glow);
+      }
+
+      .media-tile.is-paused video {
+        opacity: 0.42;
+      }
+
+      .media-tile.is-muted::after,
+      .media-tile.is-focus-muted::after,
+      .media-tile.is-paused::after {
+        display: block;
+        border-top: 1px solid var(--line);
+        color: var(--amber);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        padding: 6px 10px;
+        text-transform: uppercase;
+      }
+
+      .media-tile.is-muted::after {
+        content: "muted locally";
+      }
+
+      .media-tile.is-focus-muted::after {
+        content: "audio moved to focus window";
+      }
+
+      .media-tile.is-paused::after {
+        content: "subscription paused";
+      }
+
+      .media-tile video {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        max-height: min(58vh, 520px);
+        object-fit: contain;
+        background: var(--field-bg);
+      }
+
+      .media-tile span {
+        display: block;
+        padding: 8px 10px;
+        font-size: 0.86rem;
+        font-weight: 700;
+      }
+
+      .media-events {
+        border: 1px solid var(--line);
+        background: var(--panel-hi);
+        margin-top: 12px;
+        max-height: 120px;
+        overflow: auto;
+        padding: 10px 12px;
+      }
+
+      .media-events p {
+        margin: 0 0 6px;
+      }
+
+      .media-events p:last-child {
+        margin-bottom: 0;
+      }
+
+      .panel-head,
+      .room-row,
+      .participant-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .room-row,
+      .participant-row {
+        border: 1px solid var(--line);
+        background: var(--panel-hi);
+        padding: 12px;
+      }
+
+      .room-row > div:first-child,
+      .participant-row > div:first-child {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .participant-row {
+        align-items: start;
+        grid-template-columns: 1fr;
+      }
+
+      .participant-row small {
+        display: block;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+      }
+
+      .row-title {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .meta-line {
+        color: var(--phosphor-dim);
+        font-size: 12px;
+      }
+
+      .participant-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 7px;
+      }
+
+      .chip,
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid rgba(0, 255, 102, 0.2);
+        background: rgba(0, 255, 102, 0.055);
+        color: var(--phosphor-bright);
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        padding: 2px 7px;
+        text-transform: uppercase;
+      }
+
+      .status-pill.warn {
+        border-color: rgba(255, 176, 0, 0.45);
+        background: rgba(255, 176, 0, 0.08);
+        color: var(--amber);
+      }
+
+      .field-help {
+        margin: -2px 0 0;
+        color: var(--phosphor-dim);
+        font-size: 12px;
+        letter-spacing: normal;
+        text-transform: none;
+      }
+
+      .action-section {
+        border-top: 1px solid rgba(0, 255, 102, 0.12);
+        display: grid;
+        gap: 12px;
+        padding-top: 14px;
+      }
+
+      .room-row.selected {
+        border-color: var(--line-hot);
+        background: rgba(0, 255, 102, 0.08);
+        box-shadow: var(--glow);
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 22px;
+      }
+
+      .compact-actions {
+        margin-top: 0;
+      }
+
+      .row-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+        min-width: 0;
+      }
+
+      .participant-row .row-actions {
+        justify-content: flex-start;
+      }
+
+      label,
+      summary {
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+
+      label {
+        display: grid;
+        gap: 8px;
+      }
+
+      label::before {
+        content: "› ";
+        color: var(--phosphor-dim);
+      }
+
+      .actions label {
+        display: inline-flex !important;
+        align-items: center;
+        gap: 10px !important;
+        letter-spacing: normal;
+        text-transform: none;
+      }
+
+      .actions label::before {
+        content: "";
+      }
+
+      input,
+      select {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid var(--line);
+        border-radius: 0;
+        background: var(--field-bg);
+        color: var(--field-ink);
+        font: inherit;
+        outline: none;
+        padding: 13px 14px;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+
+      input::placeholder {
+        color: var(--phosphor-dim);
+        opacity: 0.78;
+      }
+
+      input:focus,
+      select:focus {
+        border-color: var(--line-hot);
+        box-shadow: 0 0 0 1px var(--line-hot), inset 0 0 18px rgba(0, 255, 102, 0.08);
+      }
+
+      input[type="checkbox"] {
+        width: 15px !important;
+        min-height: 15px !important;
+        accent-color: var(--phosphor);
+      }
+
+      input[type="file"] {
+        padding: 10px;
+      }
+
+      details {
+        border-top: 1px solid rgba(0, 255, 102, 0.12);
+        padding-top: 7px;
+      }
+
+      summary {
+        color: var(--phosphor-dim);
+        cursor: pointer;
+        list-style: none;
+        padding: 7px 0;
+      }
+
+      summary::before {
+        content: "▸ ";
+        color: var(--phosphor);
+      }
+
+      details[open] summary::before {
+        content: "▾ ";
+      }
+
+      summary::-webkit-details-marker {
+        display: none;
+      }
+
+      button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        border: 1px solid var(--line-hot);
+        border-radius: 0;
+        background: transparent;
+        color: var(--phosphor);
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        padding: 12px 20px;
+        text-transform: uppercase;
+        transition: background 0.14s, box-shadow 0.14s, color 0.14s;
+      }
+
+      button::before {
+        content: "> ";
+      }
+
+      button:hover:not(:disabled) {
+        background: rgba(0, 255, 102, 0.12);
+        box-shadow: var(--glow);
+        color: var(--phosphor-bright);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+
+      #connectButton,
+      #createRoomButton,
+      #publishConfirmButton {
+        border-color: var(--phosphor);
+        background: var(--phosphor);
+        color: var(--inverse-ink);
+        box-shadow: var(--glow);
+      }
+
+      #connectButton:hover,
+      #createRoomButton:hover,
+      #publishConfirmButton:hover {
+        background: var(--phosphor-bright);
+      }
+
+      .row-actions button,
+      .secondary-button {
+        min-height: 34px;
+        border-color: var(--line);
+        background: transparent;
+        color: var(--phosphor-bright);
+        padding: 8px 11px;
+        white-space: nowrap;
+      }
+
+      .danger-button {
+        border-color: var(--amber) !important;
+        color: var(--amber) !important;
+      }
+
+      .danger-button::before {
+        content: "! ";
+      }
+
+      .danger-button:hover:not(:disabled) {
+        background: rgba(255, 176, 0, 0.14);
+        box-shadow: 0 0 8px rgba(255, 176, 0, 0.5), 0 0 22px rgba(255, 176, 0, 0.2);
+      }
+
+      .watch-active {
+        border-color: var(--phosphor) !important;
+        background: rgba(75, 255, 128, 0.12) !important;
+        color: var(--phosphor-bright) !important;
+        box-shadow: 0 0 8px rgba(75, 255, 128, 0.35);
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        border: 1px solid var(--line-hot);
+        background: rgba(0, 255, 102, 0.06);
+        color: var(--phosphor);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        padding: 5px 12px;
+        text-transform: uppercase;
+      }
+
+      .badge.live {
+        color: var(--phosphor-bright);
+        text-shadow: var(--glow);
+      }
+
+      .badge.warn {
+        border-color: rgba(255, 176, 0, 0.55);
+        background: rgba(255, 176, 0, 0.08);
+        color: var(--amber);
+      }
+
+      .output {
+        min-height: 260px;
+        max-height: 420px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        background: var(--field-bg);
+        color: var(--field-ink);
+        font: 0.84rem/1.45 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        margin: 16px 0 0;
+        padding: 12px;
+        white-space: pre-wrap;
+      }
+
+      .output::selection,
+      input::selection {
+        background: var(--phosphor);
+        color: var(--inverse-ink);
+      }
+
+      code {
+        color: var(--phosphor-bright);
+        font: inherit;
+      }
+
+      .operator-shell {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        width: min(1520px, calc(100vw - 32px));
+        height: calc(100vh - 52px);
+        overflow: hidden;
+        padding: 18px 0 14px;
+      }
+
+      .operator-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+        gap: 18px;
+        align-items: end;
+        margin-bottom: 12px;
+      }
+
+      .operator-hero h1 {
+        font-size: clamp(44px, 6vw, 88px);
+        line-height: 0.9;
+      }
+
+      .operator-hero .lede {
+        margin: 10px 0 0;
+      }
+
+      .mission-card {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--line-hot);
+        background: linear-gradient(135deg, rgba(0, 255, 102, 0.12), rgba(0, 0, 0, 0.14));
+        box-shadow: var(--glow);
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        text-transform: uppercase;
+      }
+
+      .mission-card::after {
+        content: "";
+        position: absolute;
+        inset: auto -10% 0;
+        height: 3px;
+        background: linear-gradient(90deg, transparent, var(--phosphor), transparent);
+        opacity: 0.75;
+        animation: pulsebar 2.4s ease-in-out infinite;
+      }
+
+      @keyframes pulsebar {
+        0%, 100% { transform: translateX(-45%); opacity: 0.35; }
+        50% { transform: translateX(45%); opacity: 0.85; }
+      }
+
+      .mission-card span,
+      .mission-card small {
+        color: var(--phosphor-dim);
+        font-size: 11px;
+        letter-spacing: 0.18em;
+      }
+
+      .mission-card strong {
+        color: var(--phosphor-bright);
+        font-family: "VT323", "JetBrains Mono", monospace;
+        font-size: 28px;
+        font-weight: 400;
+        letter-spacing: 0.06em;
+        line-height: 1;
+        text-shadow: var(--glow);
+      }
+
+      .telemetry-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .telemetry-cell {
+        border: 1px solid rgba(0, 255, 102, 0.2);
+        background: rgba(0, 0, 0, 0.18);
+        display: grid;
+        gap: 3px;
+        min-height: 56px;
+        padding: 8px;
+      }
+
+      .telemetry-cell b {
+        color: var(--phosphor-bright);
+        font-family: "VT323", "JetBrains Mono", monospace;
+        font-size: 24px;
+        font-weight: 400;
+        line-height: 1;
+        text-shadow: var(--glow);
+      }
+
+      .operator-grid {
+        position: fixed;
+        inset: 52px 20px 20px;
+        z-index: 2;
+        min-height: 0;
+        overflow: visible;
+        pointer-events: none;
+      }
+
+      .window {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: min(1380px, calc(100% - 48px));
+        height: min(860px, calc(100% - 42px));
+        min-height: 0;
+        overflow: hidden;
+        padding-top: 44px;
+        pointer-events: auto;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32), inset 0 0 28px rgba(0, 255, 102, 0.035);
+        transition: border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+        z-index: var(--z, 1);
+      }
+
+      .window:not(.is-open) {
+        display: none;
+      }
+
+      .window.is-open {
+        animation: window-open 0.28s steps(6, end) forwards;
+      }
+
+      .window.is-focused {
+        border-color: var(--line-hot);
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), var(--glow), inset 0 0 36px rgba(0, 255, 102, 0.08);
+      }
+
+      @keyframes window-open {
+        0% {
+          opacity: 0;
+          transform: translate(calc(-50% + var(--open-origin-x, 0px)), calc(-50% + var(--open-origin-y, 0px))) scale(0.12);
+          filter: brightness(2.2);
+        }
+        55% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1.035);
+        }
+        100% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1);
+          filter: brightness(1);
+        }
+      }
+
+      .window::before {
+        width: 20px;
+        height: 20px;
+      }
+
+      .window::after {
+        width: 26px;
+        height: 26px;
+      }
+
+      .window:hover {
+        border-color: var(--line-hot);
+        box-shadow: 0 22px 56px rgba(0, 0, 0, 0.42), var(--glow), inset 0 0 34px rgba(0, 255, 102, 0.055);
+      }
+
+      body[data-link="live"] .window-link {
+        border-color: var(--line-hot);
+        box-shadow: var(--glow), inset 0 0 34px rgba(0, 255, 102, 0.06);
+      }
+
+      body[data-link="fault"] .window-link {
+        border-color: var(--amber);
+        box-shadow: 0 0 8px rgba(255, 176, 0, 0.5), 0 0 22px rgba(255, 176, 0, 0.2);
+      }
+
+      .window-titlebar {
+        cursor: grab;
+        user-select: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        min-height: 32px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(0, 255, 102, 0.07);
+        color: var(--phosphor);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 7px 10px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        overflow: hidden;
+        text-transform: uppercase;
+      }
+
+      .window-titlebar::before,
+      .window-titlebar::after {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border: 1px solid var(--line-hot);
+        flex: 0 0 auto;
+      }
+
+      .window-titlebar::before {
+        box-shadow: 14px 0 0 -1px rgba(0, 255, 102, 0.2), 28px 0 0 -1px rgba(255, 176, 0, 0.28);
+      }
+
+      .window-titlebar > span:first-child {
+        margin-right: auto;
+      }
+
+      .window-titlebar .actions {
+        margin: 0;
+      }
+
+      .window-close {
+        width: auto;
+        min-height: 0;
+        border: 1px solid var(--line);
+        background: rgba(0, 0, 0, 0.18);
+        color: var(--phosphor-dim);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        padding: 3px 7px;
+      }
+
+      .window-close:hover,
+      .window-close:focus {
+        border-color: var(--line-hot);
+        color: var(--phosphor-bright);
+        box-shadow: var(--glow);
+      }
+
+      .window.is-dragging {
+        cursor: grabbing;
+        opacity: 0.94;
+        transition: none;
+      }
+
+      .window.is-dragging .window-titlebar {
+        cursor: grabbing;
+      }
+
+      .window-link { --z: 10; width: min(940px, calc(100% - 48px)); height: min(640px, calc(100% - 42px)); }
+      .window-rooms { --z: 20; }
+      .window-participants { --z: 30; }
+      .window-media { --z: 40; }
+      .window-focus { --z: 48; width: min(1080px, calc(100% - 48px)); height: min(760px, calc(100% - 42px)); }
+      .window-controls { --z: 55; width: min(760px, calc(100% - 48px)); height: min(520px, calc(100% - 42px)); }
+      .window-exfil { --z: 45; width: min(860px, calc(100% - 48px)); height: min(680px, calc(100% - 42px)); overflow: auto; }
+      .window-recording { --z: 46; width: min(620px, calc(100% - 48px)); height: min(330px, calc(100% - 42px)); }
+      .window-trace {
+        --z: 50;
+        left: 50%;
+        top: 0;
+        width: min(1460px, calc(100vw - 44px));
+        height: min(62vh, 680px);
+        border-top: 0;
+        transform: translate(-50%, -110%);
+      }
+
+      .window-trace.is-open {
+        animation: trace-drop 0.26s steps(7, end) forwards;
+      }
+
+      @keyframes trace-drop {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -110%);
+          filter: brightness(2.4);
+        }
+        72% {
+          opacity: 1;
+          transform: translate(-50%, 8px);
+        }
+        100% {
+          opacity: 1;
+          transform: translate(-50%, 0);
+          filter: brightness(1);
+        }
+      }
+
+      .scroll-pane {
+        max-height: calc(100vh - 330px);
+        overflow: auto;
+        overflow-x: hidden;
+        padding-right: 4px;
+        scrollbar-width: none;
+      }
+
+      .scroll-pane::-webkit-scrollbar,
+      .window::-webkit-scrollbar,
+      .output::-webkit-scrollbar {
+        display: none;
+      }
+
+      .window,
+      .output {
+        scrollbar-width: none;
+      }
+
+      .control-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .control-grid label {
+        align-content: start;
+      }
+
+      .control-grid label::before {
+        content: none;
+      }
+
+      .control-grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .window-media .media-grid {
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+
+      .window-media .media-grid:has(.media-tile:only-child) {
+        grid-template-columns: minmax(260px, min(100%, 920px));
+        justify-content: center;
+      }
+
+      .window-media .media-grid:has(.media-tile:only-child) .media-tile video {
+        max-height: min(46vh, 480px);
+      }
+
+      .focus-stage {
+        display: grid;
+        gap: 12px;
+        height: calc(100% - 96px);
+        min-height: 0;
+      }
+
+      .focus-stage video {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        border: 1px solid var(--line);
+        background: var(--field-bg);
+        object-fit: contain;
+      }
+
+      .focus-stage .row-actions {
+        justify-content: flex-start;
+      }
+
+      .window-exfil .scroll-pane {
+        max-height: 150px;
+      }
+
+      .window-exfil .output {
+        margin-top: 8px;
+        max-height: 140px;
+      }
+
+      .command-details {
+        border: 1px solid var(--line);
+        background: var(--panel-hi);
+        padding: 8px 10px;
+      }
+
+      .command-details summary {
+        cursor: pointer;
+        color: var(--phosphor-bright);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .window-recording .actions {
+        margin-top: 14px;
+      }
+
+      .window-trace .output {
+        min-height: 0;
+        height: calc(100% - 96px);
+        max-height: none;
+        overflow-x: hidden;
+        overflow-wrap: anywhere;
+      }
+
+      .operator-toast {
+        position: fixed;
+        right: 22px;
+        bottom: 22px;
+        z-index: 9997;
+        max-width: min(460px, calc(100vw - 44px));
+        border: 1px solid var(--line-hot);
+        background: var(--panel-hi);
+        box-shadow: var(--glow);
+        color: var(--phosphor-bright);
+        font-size: 13px;
+        opacity: 0;
+        padding: 13px 15px;
+        pointer-events: none;
+        transform: translateY(10px);
+        transition: opacity 0.16s ease, transform 0.16s ease;
+      }
+
+      .operator-toast.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .operator-toast.warn {
+        border-color: rgba(255, 176, 0, 0.65);
+        box-shadow: 0 0 8px rgba(255, 176, 0, 0.45), 0 0 22px rgba(255, 176, 0, 0.18);
+        color: var(--amber);
+      }
+
+      .operator-confirm {
+        position: fixed;
+        inset: 0;
+        z-index: 9996;
+        display: grid;
+        place-items: center;
+        background: rgba(0, 0, 0, 0.48);
+        pointer-events: auto;
+      }
+
+      .operator-confirm[hidden] {
+        display: none;
+      }
+
+      .operator-confirm-card {
+        width: min(520px, calc(100vw - 44px));
+        border: 1px solid var(--amber);
+        background: var(--panel-hi);
+        box-shadow: 0 0 8px rgba(255, 176, 0, 0.45), 0 0 28px rgba(255, 176, 0, 0.18);
+        padding: 20px;
+      }
+
+      .operator-confirm-card p:last-of-type {
+        margin-bottom: 0;
+      }
+
+      @media (max-width: 1180px) {
+        .operator-hero,
+        .control-grid,
+        .control-grid.three,
+        .telemetry-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .window-link,
+        .window-rooms,
+        .window-participants,
+        .window-media,
+        .window-focus,
+        .window-controls,
+        .window-exfil,
+        .window-recording,
+        .window-trace {
+          grid-column: auto;
+        }
+      }
+
+      @media (max-width: 900px) {
+        .grid,
+        .panel-head,
+        .room-row,
+        .participant-row {
+          grid-template-columns: 1fr;
+        }
+
+        h1 {
+          font-size: 3.8rem;
+        }
+
+        .shell,
+        .statusbar {
+          width: min(100% - 32px, 1180px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="rain"></canvas>
+    <div class="hud-backdrop" aria-hidden="true"></div>
+    <div class="hud-sweep" aria-hidden="true"></div>
+    <div id="operatorToast" class="operator-toast" role="status" aria-live="polite"></div>
+    <div id="operatorConfirm" class="operator-confirm" role="dialog" aria-modal="true" aria-labelledby="operatorConfirmTitle" hidden>
+      <div class="operator-confirm-card">
+        <p class="eyebrow">confirmation required</p>
+        <h2 id="operatorConfirmTitle">Confirm action</h2>
+        <p id="operatorConfirmMessage" class="hint"></p>
+        <div class="actions">
+          <button id="operatorConfirmOk" type="button" class="danger-button">Confirm</button>
+          <button id="operatorConfirmCancel" type="button" class="secondary-button">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <span>NEBUCHADNEZZAR // OPERATOR TERMINAL</span>
+      <span>LINK: <span class="live">OPERATOR MODE</span><span class="blink">_</span></span>
+      <div class="status-actions">
+        <button id="traceToggle" class="trace-toggle" type="button" aria-label="Open trace console" aria-pressed="false" title="Open trace console">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 3v18M12 3v18M19 3v18"></path>
+            <path d="M3 7h4M10 11h4M17 6h4M3 16h4M10 19h4M17 14h4"></path>
+          </svg>
+          TRACE
+        </button>
+        <button id="themeToggle" class="theme-toggle" type="button" aria-label="Theme: system" title="Theme: system"></button>
+      </div>
+    </div>
+    <main class="shell operator-shell">
+      <section class="hero operator-hero">
+        <div>
+          <p class="eyebrow">conferencing1 demonstration</p>
+          <h1>Janus Operator Console</h1>
+          <p class="lede">Operator-side VideoRoom control surface for tracking rooms, subscribing to media, and issuing Janus commands through the exposed signaling path.</p>
+        </div>
+        <div class="mission-card" aria-label="operator status">
+          <span>SHIP: NEBUCHADNEZZAR</span>
+          <strong id="connectionStatus">STANDBY // enter a Janus WebSocket URL</strong>
+          <div class="telemetry-grid" aria-label="live console telemetry">
+            <span class="telemetry-cell"><small>room</small><b id="selectedRoomReadout">none</b></span>
+            <span class="telemetry-cell"><small>feeds</small><b id="feedReadout">0</b></span>
+            <span class="telemetry-cell"><small>events</small><b id="eventReadout">0</b></span>
+          </div>
+          <small>Raw Janus WebSocket first. DVRTC helper can fill a scenario URL.</small>
+        </div>
+      </section>
+
+      <section class="operator-grid" aria-label="Janus operator console">
+        <section class="panel window window-link is-open is-focused" data-window="link">
+          <div class="window-titlebar">
+            <span>01 // uplink</span>
+            <span id="terminalLinkStatus" class="live">STANDBY</span>
+          </div>
+          <div class="stack">
+            <div>
+              <p class="eyebrow">connection</p>
+              <h2>Signaling endpoint</h2>
+            </div>
+            <label>
+              WebSocket URL
+              <input id="janusUrl" autocomplete="off" placeholder="wss://host/janus/secret or ws://localhost:8188/">
+            </label>
+            <details>
+              <summary>DVRTC conferencing1 helper</summary>
+              <p class="hint">Creates a disposable scenario meeting only to obtain a proxied Janus WebSocket URL. It is not selected as the target room.</p>
+              <div class="stack" style="margin-top: 12px;">
+                <label>
+                  Frontend URL
+                  <input id="createFrontendUrl" autocomplete="off" placeholder="https://192.0.2.10">
+                </label>
+                <label>
+                  Display name
+                  <input id="createDisplayName" autocomplete="off" maxlength="48" placeholder="operator console">
+                </label>
+              </div>
+            </details>
+            <div class="actions">
+              <button id="connectButton" type="button">Connect</button>
+              <button id="leaveButton" type="button" class="secondary-button" disabled>Leave operator sessions</button>
+            </div>
+            <p class="hint">Paste a Janus WebSocket URL, or leave it empty to let the DVRTC helper fill one. URL helpers: <code>?janus=...</code>, <code>?frontend=...</code>, <code>?name=...</code>.</p>
+          </div>
+        </section>
+
+        <section class="panel window window-rooms" data-window="rooms">
+          <div class="window-titlebar">
+            <span>02 // rooms</span>
+            <span id="roomCount" class="badge">0 rooms</span>
+            <button class="window-close" type="button" data-close-window="rooms" aria-label="Close rooms">close</button>
+          </div>
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">rooms</p>
+              <h2>Active room list</h2>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="refreshButton" type="button" class="secondary-button" disabled>Refresh rooms</button>
+            <button id="createRoomButton" type="button" disabled>Create room and publish</button>
+            <label style="display: inline-flex; gap: 8px; align-items: center;">
+              <input id="autoRefreshRooms" type="checkbox" style="width: auto; min-height: auto;" checked>
+              Auto-refresh
+            </label>
+            <label style="display: inline-flex; gap: 8px; align-items: center;">
+              <input id="activeRoomsOnly" type="checkbox" style="width: auto; min-height: auto;" checked>
+              Only rooms with participants
+            </label>
+            <span id="roomsLastRefresh" class="hint">not refreshed yet</span>
+          </div>
+          <div id="roomList" class="room-list scroll-pane"></div>
+        </section>
+
+        <section class="panel window window-participants" data-window="participants">
+          <div class="window-titlebar">
+            <span>03 // participants</span>
+            <span id="participantCount" class="badge">0 users</span>
+            <button class="window-close" type="button" data-close-window="participants" aria-label="Close participants">close</button>
+          </div>
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">participants</p>
+              <h2>Selected room roster</h2>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="joinSelectedButton" type="button" disabled>Publish to room</button>
+            <button id="watchRoomButton" type="button" disabled>Watch all</button>
+            <button id="showExfilButton" type="button" class="secondary-button" disabled>RTP forwarding</button>
+            <button id="showRecordingButton" type="button" class="secondary-button" disabled>Recording</button>
+            <button id="kickAllButton" type="button" class="secondary-button danger-button" disabled>Destroy room</button>
+            <label style="display: inline-flex; gap: 8px; align-items: center;">
+              <input id="autoRefreshParticipants" type="checkbox" style="width: auto; min-height: auto;" checked>
+              Auto-refresh
+            </label>
+            <span id="participantsLastRefresh" class="hint">not refreshed yet</span>
+          </div>
+          <div id="participantList" class="participant-list scroll-pane"></div>
+        </section>
+
+        <section class="panel window window-media" data-window="media">
+          <div class="window-titlebar">
+            <span>04 // media wall</span>
+            <span id="mediaCount" class="badge">0 feeds</span>
+            <button class="window-close" type="button" data-close-window="media" aria-label="Close media wall and stop watched feeds">close</button>
+          </div>
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">media wall</p>
+              <h2>Watched feeds</h2>
+            </div>
+          </div>
+          <div id="mediaGrid" class="media-grid"><p class="hint">Use Watch on a participant to subscribe to their media.</p></div>
+          <div id="mediaEvents" class="media-events" hidden></div>
+        </section>
+
+        <section class="panel window window-focus stack" data-window="focus">
+          <div class="window-titlebar">
+            <span>05 // focused stream</span>
+            <span>FOCUS</span>
+            <button class="window-close" type="button" data-close-window="focus" aria-label="Close focused stream">close</button>
+          </div>
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">focused stream</p>
+              <h2 id="focusStreamTitle">No focused stream</h2>
+              <p id="focusStreamMeta" class="hint">Use Open focus on a media tile.</p>
+            </div>
+          </div>
+          <div class="focus-stage">
+            <video id="focusVideo" autoplay playsinline controls></video>
+            <div id="focusActions" class="row-actions"></div>
+          </div>
+        </section>
+
+        <section class="panel window window-controls stack" data-window="controls">
+          <div class="window-titlebar"><span>06 // publish source</span><span>READY</span><button class="window-close" type="button" data-close-window="controls" aria-label="Close publish source">close</button></div>
+          <div>
+            <p class="eyebrow">operator injection</p>
+            <h2 id="publishTargetLabel">Publish source</h2>
+            <p class="hint">Choose what the operator will publish. Publishing starts only after pressing Publish.</p>
+          </div>
+          <div class="control-grid">
+            <label>
+              Publish source
+              <select id="publishSource">
+                <option value="bunny">Big Buck Bunny clip</option>
+                <option value="screen">Screen share</option>
+                <option value="camera">Camera and microphone</option>
+                <option value="file">Video file</option>
+              </select>
+            </label>
+            <label id="videoFileLabel" hidden>
+              Video file
+              <input id="videoFile" type="file" accept="video/*">
+            </label>
+          </div>
+          <div class="actions">
+            <button id="publishConfirmButton" type="button">Publish</button>
+            <button id="publishCancelButton" type="button" class="secondary-button">Cancel</button>
+          </div>
+        </section>
+
+        <section class="panel window window-exfil stack" data-window="exfil">
+          <div class="window-titlebar"><span>07 // RTP forwarding</span><span>RTP</span><button class="window-close" type="button" data-close-window="exfil" aria-label="Close RTP forwarding">close</button></div>
+          <div>
+            <p class="eyebrow">RTP forwarding</p>
+            <h2>Forward selected media</h2>
+            <p class="hint">Choose Forward RTP on a participant, enter where your RTP receiver is listening, then start forwarding here.</p>
+          </div>
+          <div class="participant-row">
+            <div>
+              <p class="eyebrow">forwarding target</p>
+              <strong id="rtpTargetName">No participant selected</strong>
+              <div id="rtpTargetMeta" class="meta-line">Use Forward RTP on a participant row.</div>
+            </div>
+          </div>
+          <div class="control-grid three">
+            <label>
+              Receiver IP or hostname
+              <input id="rtpHost" autocomplete="off" placeholder="e.g. 192.0.2.50">
+              <span class="field-help">The machine running your RTP listener.</span>
+            </label>
+            <label>
+              Audio RTP port
+              <input id="rtpAudioPort" inputmode="numeric" value="5004" placeholder="5004">
+              <span class="field-help">UDP port for forwarded audio. Leave empty to skip audio.</span>
+            </label>
+            <label>
+              Video RTP port
+              <input id="rtpVideoPort" inputmode="numeric" value="5006" placeholder="5006">
+              <span class="field-help">UDP port for forwarded video. Leave empty to skip video.</span>
+            </label>
+          </div>
+          <div class="actions">
+            <button id="startForwardButton" type="button" disabled>Start forwarding</button>
+            <button id="listForwardersButton" type="button" class="secondary-button" disabled>Refresh forwarders</button>
+            <button id="copyRtpCommandsButton" type="button" class="secondary-button">Copy receiver commands</button>
+          </div>
+          <details class="command-details">
+            <summary>Receiver command preview</summary>
+            <pre id="rtpCommandExamples" class="output"></pre>
+          </details>
+          <div>
+            <p class="eyebrow">active forwarders</p>
+            <div id="forwarderList" class="participant-list scroll-pane"><p class="hint">No active RTP forwarders tracked by this console.</p></div>
+          </div>
+        </section>
+
+        <section class="panel window window-recording stack" data-window="recording">
+          <div class="window-titlebar"><span>08 // recording</span><span>JANUS</span><button class="window-close" type="button" data-close-window="recording" aria-label="Close recording">close</button></div>
+          <div>
+            <p class="eyebrow">Janus room recording</p>
+            <h2>Recording controls</h2>
+            <p class="hint">Toggle Janus-native room recording for the selected room. Recording files remain on the Janus host/container.</p>
+            <p class="hint">State: <span id="recordingState" class="status-pill">unknown</span></p>
+          </div>
+          <div class="actions">
+            <button id="recordOnButton" type="button" disabled>Start Janus recording</button>
+            <button id="recordOffButton" type="button" class="secondary-button" disabled>Stop Janus recording</button>
+          </div>
+        </section>
+
+        <section class="panel window window-trace" data-window="trace">
+          <div class="window-titlebar">
+            <span>09 // debug trace</span>
+            <div class="actions compact-actions">
+              <label style="display: inline-flex; gap: 8px; align-items: center;">
+                <input id="autoScrollTrace" type="checkbox" style="width: auto; min-height: auto;" checked>
+                Auto-scroll
+              </label>
+              <label style="display: inline-flex; gap: 8px; align-items: center;">
+                <input id="verboseJanusEvents" type="checkbox" style="width: auto; min-height: auto;">
+                Verbose events
+              </label>
+              <button id="clearLogButton" type="button" class="secondary-button">Clear</button>
+              <button class="window-close" type="button" data-close-window="trace" aria-label="Close trace buffer">close</button>
+            </div>
+          </div>
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">advanced debug</p>
+              <h2>Raw Janus messages</h2>
+            </div>
+          </div>
+          <pre id="eventLog" class="output"></pre>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const THEME_STORAGE_KEY = "janus-operator-theme";
+      const THEME_MODES = ["system", "dark", "light"];
+      const THEME_LABELS = {
+        system: "system",
+        dark: "dark",
+        light: "bright",
+      };
+      const THEME_ICONS = {
+        system: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="11" rx="1.2"></rect><path d="M8 20h8M12 16v4M8 9h8M8 12h5"></path></svg>',
+        dark: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.7 18.2A8 8 0 0 1 13.4 3.1a6 6 0 1 0 4.3 15.1z"></path></svg>',
+        light: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.4"></circle><path d="M12 2.8v2.4M12 18.8v2.4M4.5 4.5l1.7 1.7M17.8 17.8l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.5 19.5l1.7-1.7M17.8 6.2l1.7-1.7"></path></svg>',
+      };
+      const systemThemeQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+
+      function loadThemeMode() {
+        try {
+          const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+          return THEME_MODES.includes(savedTheme) ? savedTheme : "system";
+        } catch (error) {
+          return "system";
+        }
+      }
+
+      function saveThemeMode(theme) {
+        try {
+          localStorage.setItem(THEME_STORAGE_KEY, theme);
+        } catch (error) {
+          // Ignore storage failures; the selected theme still applies for this page load.
+        }
+      }
+
+      function resolveTheme(theme) {
+        if (theme === "system") {
+          return systemThemeQuery?.matches ? "light" : "dark";
+        }
+        return theme === "light" ? "light" : "dark";
+      }
+
+      function nextThemeMode(theme) {
+        const index = THEME_MODES.indexOf(theme);
+        return THEME_MODES[(index + 1) % THEME_MODES.length];
+      }
+
+      function updateThemeButton(theme) {
+        const button = document.getElementById("themeToggle");
+        if (!button) return;
+        const nextTheme = nextThemeMode(theme);
+        const resolvedTheme = resolveTheme(theme);
+        const resolvedLabel = theme === "system" ? ` (${THEME_LABELS[resolvedTheme]})` : "";
+        button.innerHTML = THEME_ICONS[theme];
+        button.dataset.themeMode = theme;
+        button.setAttribute("aria-label", `Theme: ${THEME_LABELS[theme]}${resolvedLabel}. Click for ${THEME_LABELS[nextTheme]}.`);
+        button.title = `Theme: ${THEME_LABELS[theme]}${resolvedLabel}`;
+      }
+
+      function setThemeMode(theme, options = {}) {
+        const normalized = THEME_MODES.includes(theme) ? theme : "system";
+        const resolvedTheme = resolveTheme(normalized);
+        document.body.dataset.themeMode = normalized;
+        document.body.dataset.theme = resolvedTheme;
+        if (options.persist !== false) {
+          saveThemeMode(normalized);
+        }
+        updateThemeButton(normalized);
+        window.dispatchEvent(new CustomEvent("janus-themechange", { detail: { mode: normalized, theme: resolvedTheme } }));
+      }
+
+      setThemeMode(loadThemeMode(), { persist: false });
+
+      if (systemThemeQuery) {
+        const handleSystemThemeChange = () => {
+          if (document.body.dataset.themeMode === "system") {
+            setThemeMode("system", { persist: false });
+          }
+        };
+        if (systemThemeQuery.addEventListener) {
+          systemThemeQuery.addEventListener("change", handleSystemThemeChange);
+        } else {
+          systemThemeQuery.addListener(handleSystemThemeChange);
+        }
+      }
+
+      (function () {
+        const canvas = document.getElementById("rain");
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const glyphs = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホ0123456789:.=*+<>?/\\$#";
+        const fontSize = 16;
+        const rainPalettes = {
+          dark: {
+            fade: "rgba(4, 8, 4, 0.10)",
+            glyph: "#00ff66",
+            hot: "#9effc0",
+          },
+          light: {
+            fade: "rgba(242, 255, 245, 0.18)",
+            glyph: "#008f3a",
+            hot: "#003d19",
+          },
+        };
+        let columns = 0;
+        let drops = [];
+
+        function resizeRain() {
+          canvas.width = window.innerWidth;
+          canvas.height = window.innerHeight;
+          columns = Math.floor(canvas.width / fontSize);
+          drops = new Array(columns).fill(0).map(() => Math.random() * -50);
+        }
+
+        window.addEventListener("resize", resizeRain);
+        window.addEventListener("janus-themechange", () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+        resizeRain();
+
+        window.setInterval(() => {
+          const palette = rainPalettes[document.body.dataset.theme === "light" ? "light" : "dark"];
+          ctx.fillStyle = palette.fade;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.font = `${fontSize}px monospace`;
+          for (let i = 0; i < columns; i += 1) {
+            const char = glyphs[Math.floor(Math.random() * glyphs.length)];
+            const y = drops[i] * fontSize;
+            ctx.fillStyle = Math.random() > 0.975 ? palette.hot : palette.glyph;
+            ctx.fillText(char, i * fontSize, y);
+            if (y > canvas.height && Math.random() > 0.975) {
+              drops[i] = 0;
+            }
+            drops[i] += 1;
+          }
+        }, 58);
+      })();
+
+      const els = {
+        createFrontendUrl: document.getElementById("createFrontendUrl"),
+        createDisplayName: document.getElementById("createDisplayName"),
+        janusUrl: document.getElementById("janusUrl"),
+        connectButton: document.getElementById("connectButton"),
+        refreshButton: document.getElementById("refreshButton"),
+        publishSource: document.getElementById("publishSource"),
+        videoFileLabel: document.getElementById("videoFileLabel"),
+        videoFile: document.getElementById("videoFile"),
+        publishTargetLabel: document.getElementById("publishTargetLabel"),
+        publishConfirmButton: document.getElementById("publishConfirmButton"),
+        publishCancelButton: document.getElementById("publishCancelButton"),
+        createRoomButton: document.getElementById("createRoomButton"),
+        joinSelectedButton: document.getElementById("joinSelectedButton"),
+        showExfilButton: document.getElementById("showExfilButton"),
+        showRecordingButton: document.getElementById("showRecordingButton"),
+        kickAllButton: document.getElementById("kickAllButton"),
+        leaveButton: document.getElementById("leaveButton"),
+        connectionStatus: document.getElementById("connectionStatus"),
+        roomCount: document.getElementById("roomCount"),
+        autoRefreshRooms: document.getElementById("autoRefreshRooms"),
+        activeRoomsOnly: document.getElementById("activeRoomsOnly"),
+        roomsLastRefresh: document.getElementById("roomsLastRefresh"),
+        roomList: document.getElementById("roomList"),
+        participantCount: document.getElementById("participantCount"),
+        autoRefreshParticipants: document.getElementById("autoRefreshParticipants"),
+        participantsLastRefresh: document.getElementById("participantsLastRefresh"),
+        watchRoomButton: document.getElementById("watchRoomButton"),
+        participantList: document.getElementById("participantList"),
+        mediaCount: document.getElementById("mediaCount"),
+        mediaGrid: document.getElementById("mediaGrid"),
+        mediaEvents: document.getElementById("mediaEvents"),
+        focusStreamTitle: document.getElementById("focusStreamTitle"),
+        focusStreamMeta: document.getElementById("focusStreamMeta"),
+        focusVideo: document.getElementById("focusVideo"),
+        focusActions: document.getElementById("focusActions"),
+        rtpHost: document.getElementById("rtpHost"),
+        rtpAudioPort: document.getElementById("rtpAudioPort"),
+        rtpVideoPort: document.getElementById("rtpVideoPort"),
+        rtpTargetName: document.getElementById("rtpTargetName"),
+        rtpTargetMeta: document.getElementById("rtpTargetMeta"),
+        startForwardButton: document.getElementById("startForwardButton"),
+        forwarderList: document.getElementById("forwarderList"),
+        listForwardersButton: document.getElementById("listForwardersButton"),
+        copyRtpCommandsButton: document.getElementById("copyRtpCommandsButton"),
+        rtpCommandExamples: document.getElementById("rtpCommandExamples"),
+        recordOnButton: document.getElementById("recordOnButton"),
+        recordOffButton: document.getElementById("recordOffButton"),
+        recordingState: document.getElementById("recordingState"),
+        eventLog: document.getElementById("eventLog"),
+        autoScrollTrace: document.getElementById("autoScrollTrace"),
+        verboseJanusEvents: document.getElementById("verboseJanusEvents"),
+        clearLogButton: document.getElementById("clearLogButton"),
+        terminalLinkStatus: document.getElementById("terminalLinkStatus"),
+        windows: document.querySelectorAll("[data-window]"),
+        selectedRoomReadout: document.getElementById("selectedRoomReadout"),
+        feedReadout: document.getElementById("feedReadout"),
+        eventReadout: document.getElementById("eventReadout"),
+        traceToggle: document.getElementById("traceToggle"),
+        themeToggle: document.getElementById("themeToggle"),
+        operatorToast: document.getElementById("operatorToast"),
+        operatorConfirm: document.getElementById("operatorConfirm"),
+        operatorConfirmMessage: document.getElementById("operatorConfirmMessage"),
+        operatorConfirmOk: document.getElementById("operatorConfirmOk"),
+        operatorConfirmCancel: document.getElementById("operatorConfirmCancel"),
+      };
+
+      let janus = null;
+      const ROOM_RENDER_LIMIT = 250;
+      const AUTO_REFRESH_MS = 15000;
+      const WATCHED_ROOM_REFRESH_MS = 1000;
+
+      const state = {
+        connection: {
+          janusUrl: "",
+          connected: false,
+          error: "",
+        },
+        rooms: {
+          items: [],
+          participantsByRoom: new Map(),
+          refreshInFlight: null,
+        },
+        selection: {
+          roomId: null,
+        },
+        watch: {
+          rooms: new Set(),
+          inFlightFeeds: new Set(),
+        },
+        workflow: {
+          publishRoom: null,
+          publishCreatesRoom: false,
+          forwardTarget: null,
+        },
+        media: {
+          events: [],
+          focusedFeedKey: null,
+        },
+        trace: {
+          eventCount: 0,
+        },
+      };
+
+      let refreshTimer = null;
+      let watchRefreshTimer = null;
+      let refreshDebounceTimer = null;
+      let builtinVideoElement = null;
+      let zCounter = 60;
+      let dragState = null;
+      let consoleConfig = {};
+      let toastTimer = null;
+      let pendingConfirmation = null;
+      function resetSharedState() {
+        state.connection.janusUrl = "";
+        state.connection.connected = false;
+        state.connection.error = "";
+        state.rooms.items = [];
+        state.rooms.participantsByRoom.clear();
+        state.rooms.refreshInFlight = null;
+        state.selection.roomId = null;
+        state.watch.rooms.clear();
+        state.watch.inFlightFeeds.clear();
+        state.workflow.publishRoom = null;
+        state.workflow.publishCreatesRoom = false;
+        state.workflow.forwardTarget = null;
+        state.media.events.splice(0);
+        state.media.focusedFeedKey = null;
+      }
+
+      const WINDOW_PARENTS = {
+        rooms: "link",
+        participants: "rooms",
+        controls: "participants",
+        exfil: "participants",
+        recording: "participants",
+        media: "participants",
+        focus: "media",
+        trace: "link",
+      };
+
+      function applyTheme(theme) {
+        setThemeMode(theme);
+      }
+
+      els.themeToggle?.addEventListener("click", () => {
+        applyTheme(nextThemeMode(document.body.dataset.themeMode || loadThemeMode()));
+      });
+      setThemeMode(document.body.dataset.themeMode || loadThemeMode(), { persist: false });
+
+      function randomId() {
+        return Math.random().toString(36).slice(2) + Date.now().toString(36);
+      }
+
+      function randomRoomId() {
+        return 900000 + Math.floor(Math.random() * 90000);
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
+
+      function focusWindow(name) {
+        const windowEl = document.querySelector(`[data-window="${name}"]`);
+        if (!windowEl) {
+          return;
+        }
+        zCounter += 1;
+        windowEl.style.setProperty("--z", zCounter);
+        els.windows.forEach((item) => item.classList.toggle("is-focused", item === windowEl));
+      }
+
+      function updateTraceToggleButton() {
+        const traceOpen = document.querySelector('[data-window="trace"]')?.classList.contains("is-open") || false;
+        if (!els.traceToggle) {
+          return;
+        }
+        els.traceToggle.setAttribute("aria-pressed", traceOpen ? "true" : "false");
+        els.traceToggle.setAttribute("aria-label", traceOpen ? "Close trace console" : "Open trace console");
+        els.traceToggle.title = traceOpen ? "Close trace console" : "Open trace console";
+      }
+
+      function setWindowOpenOrigin(windowEl, sourceName) {
+        const stage = windowEl.closest(".operator-grid");
+        const sourceEl = sourceName ? document.querySelector(`[data-window="${sourceName}"]`) : null;
+        if (!stage || !sourceEl || !sourceEl.classList.contains("is-open")) {
+          windowEl.style.setProperty("--open-origin-x", "0px");
+          windowEl.style.setProperty("--open-origin-y", "0px");
+          return;
+        }
+        const stageRect = stage.getBoundingClientRect();
+        const sourceRect = sourceEl.getBoundingClientRect();
+        const originX = sourceRect.left + sourceRect.width / 2 - (stageRect.left + stageRect.width / 2);
+        const originY = sourceRect.top + sourceRect.height / 2 - (stageRect.top + stageRect.height / 2);
+        windowEl.style.setProperty("--open-origin-x", `${Math.round(originX)}px`);
+        windowEl.style.setProperty("--open-origin-y", `${Math.round(originY)}px`);
+      }
+
+      function revealWindow(name, options = {}) {
+        const windowEl = document.querySelector(`[data-window="${name}"]`);
+        if (!windowEl) {
+          return;
+        }
+        if (!windowEl.classList.contains("is-open")) {
+          setWindowTranslate(windowEl, 0, 0);
+          setWindowOpenOrigin(windowEl, options.from || WINDOW_PARENTS[name]);
+          windowEl.classList.add("is-open");
+        }
+        if (options.focus !== false) {
+          focusWindow(name);
+        }
+        if (name === "trace") {
+          updateTraceToggleButton();
+        }
+      }
+
+      function closeWindow(name) {
+        const windowEl = document.querySelector(`[data-window="${name}"]`);
+        if (!windowEl || name === "link") {
+          return;
+        }
+        if (name === "media" && janus) {
+          janus.stopAllWatching()
+            .then(() => notify("Media wall closed. Watched feeds stopped."))
+            .catch((error) => {
+              notify(`Stop media wall failed: ${error.message}`, "warn");
+              logEvent("Stop media wall failed", error.message);
+            });
+        }
+        if (name === "controls") {
+          state.workflow.publishRoom = null;
+          state.workflow.publishCreatesRoom = false;
+        }
+        if (name === "focus") {
+          state.media.focusedFeedKey = null;
+          renderFocusedFeed();
+          renderMediaFeeds();
+        }
+        windowEl.classList.remove("is-open", "is-focused", "is-dragging");
+        setWindowTranslate(windowEl, 0, 0);
+        const openWindows = [...els.windows].filter((item) => item.classList.contains("is-open"));
+        const topWindow = openWindows.sort((a, b) => {
+          const az = Number.parseInt(a.style.getPropertyValue("--z") || "0", 10) || 0;
+          const bz = Number.parseInt(b.style.getPropertyValue("--z") || "0", 10) || 0;
+          return bz - az;
+        })[0];
+        if (topWindow) {
+          focusWindow(topWindow.dataset.window);
+        }
+        if (name === "trace") {
+          updateTraceToggleButton();
+        }
+      }
+
+      function toggleTraceWindow() {
+        const traceWindow = document.querySelector('[data-window="trace"]');
+        if (traceWindow?.classList.contains("is-open")) {
+          closeWindow("trace");
+          return;
+        }
+        revealWindow("trace", { from: "link" });
+      }
+
+      function windowTranslate(windowEl) {
+        return {
+          x: Number.parseFloat(windowEl.dataset.dragX || "0") || 0,
+          y: Number.parseFloat(windowEl.dataset.dragY || "0") || 0,
+        };
+      }
+
+      function setWindowTranslate(windowEl, x, y) {
+        windowEl.dataset.dragX = String(Math.round(x));
+        windowEl.dataset.dragY = String(Math.round(y));
+        windowEl.style.translate = `${Math.round(x)}px ${Math.round(y)}px`;
+      }
+
+      function startWindowDrag(event, windowEl) {
+        if (event.button !== 0 || event.target.closest("button, input, select, textarea, a, label")) {
+          return;
+        }
+        event.preventDefault();
+        const { x, y } = windowTranslate(windowEl);
+        dragState = {
+          windowEl,
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          originX: x,
+          originY: y,
+        };
+        windowEl.classList.add("is-dragging");
+        windowEl.setPointerCapture?.(event.pointerId);
+      }
+
+      function moveWindowDrag(event) {
+        if (!dragState || event.pointerId !== dragState.pointerId) {
+          return;
+        }
+        const nextX = dragState.originX + event.clientX - dragState.startX;
+        const nextY = dragState.originY + event.clientY - dragState.startY;
+        setWindowTranslate(dragState.windowEl, nextX, nextY);
+      }
+
+      function endWindowDrag(event) {
+        if (!dragState || event.pointerId !== dragState.pointerId) {
+          return;
+        }
+        dragState.windowEl.classList.remove("is-dragging");
+        dragState.windowEl.releasePointerCapture?.(event.pointerId);
+        dragState = null;
+      }
+
+      els.windows.forEach((windowEl) => {
+        const name = windowEl.dataset.window;
+        const titlebar = windowEl.querySelector(".window-titlebar");
+        windowEl.addEventListener("pointerdown", () => focusWindow(name));
+        windowEl.addEventListener("focusin", () => focusWindow(name));
+        titlebar?.addEventListener("pointerdown", (event) => startWindowDrag(event, windowEl));
+        windowEl.querySelectorAll("[data-close-window]").forEach((button) => {
+          button.addEventListener("click", () => closeWindow(button.dataset.closeWindow));
+        });
+        windowEl.addEventListener("pointermove", moveWindowDrag);
+        windowEl.addEventListener("pointerup", endWindowDrag);
+        windowEl.addEventListener("pointercancel", endWindowDrag);
+      });
+
+      function logEvent(label, payload) {
+        const text = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
+        state.trace.eventCount += 1;
+        if (els.eventReadout) {
+          els.eventReadout.textContent = String(state.trace.eventCount);
+        }
+        els.eventLog.textContent += `[${new Date().toLocaleTimeString()}] ${label}\n${text}\n\n`;
+        if (els.autoScrollTrace?.checked) {
+          els.eventLog.scrollTop = els.eventLog.scrollHeight;
+        }
+      }
+
+      function notify(message, mode = "") {
+        if (!els.operatorToast) {
+          return;
+        }
+        if (toastTimer) {
+          window.clearTimeout(toastTimer);
+          toastTimer = null;
+        }
+        els.operatorToast.textContent = message;
+        els.operatorToast.className = mode === "warn" ? "operator-toast warn is-visible" : "operator-toast is-visible";
+        toastTimer = window.setTimeout(() => {
+          els.operatorToast.classList.remove("is-visible");
+          toastTimer = null;
+        }, mode === "warn" ? 5200 : 3600);
+      }
+
+      function setStatus(text, mode = "") {
+        els.connectionStatus.textContent = text;
+        els.connectionStatus.className = mode ? `badge ${mode}` : "hint";
+        document.body.dataset.link = mode === "live" ? "live" : mode === "warn" ? "fault" : "standby";
+        if (els.terminalLinkStatus) {
+          els.terminalLinkStatus.textContent = mode === "live" ? "CONNECTED" : mode === "warn" ? "FAULT" : "STANDBY";
+        }
+      }
+
+      function setConnected(connected) {
+        state.connection.connected = Boolean(connected);
+        els.refreshButton.disabled = !connected;
+        els.createRoomButton.disabled = !connected;
+        els.leaveButton.disabled = !connected;
+        if (connected) {
+          revealWindow("rooms");
+        }
+        updateSelectedRoomActions();
+      }
+
+      function updateSelectedRoomActions() {
+        const disabled = !janus || !state.selection.roomId;
+        if (!disabled) {
+          revealWindow("participants");
+        }
+        els.joinSelectedButton.disabled = disabled;
+        els.showExfilButton.disabled = disabled;
+        els.showRecordingButton.disabled = disabled;
+        els.kickAllButton.disabled = disabled;
+        els.watchRoomButton.disabled = disabled;
+        els.listForwardersButton.disabled = disabled;
+        els.recordOnButton.disabled = disabled;
+        els.recordOffButton.disabled = disabled;
+        updateWatchAllControls();
+      }
+
+      function selectRoom(room) {
+        state.selection.roomId = room;
+        if (els.selectedRoomReadout) {
+          els.selectedRoomReadout.textContent = room ? String(room) : "none";
+        }
+        updateSelectedRoomActions();
+        updateRecordingStateFromRooms();
+      }
+
+      function roomIdentifier(room) {
+        return room.room || room.id;
+      }
+
+      function roomExists(rooms, id) {
+        return rooms.some((room) => Number(roomIdentifier(room)) === Number(id));
+      }
+
+      function clearSelectedRoom(message) {
+        const room = state.selection.roomId;
+        state.selection.roomId = null;
+        if (room) {
+          state.rooms.participantsByRoom.delete(String(room));
+          state.watch.rooms.delete(String(room));
+        }
+        if (els.selectedRoomReadout) {
+          els.selectedRoomReadout.textContent = "none";
+        }
+        renderParticipants(null, []);
+        clearForwardTarget();
+        setRecordingState(null);
+        updateSelectedRoomActions();
+        if (message) {
+          notify(message, "warn");
+        }
+      }
+
+      function updateWatchAllControls() {
+        const active = Boolean(state.selection.roomId && state.watch.rooms.has(String(state.selection.roomId)));
+        if (els.watchRoomButton) {
+          els.watchRoomButton.textContent = active ? "Stop watch all" : "Watch all";
+          els.watchRoomButton.classList.toggle("watch-active", active);
+        }
+      }
+
+      async function startWatchAll(room) {
+        state.watch.rooms.add(String(room));
+        updateWatchAllControls();
+        renderRooms(state.rooms.items, state.rooms.participantsByRoom);
+        revealWindow("media");
+        const participants = await refreshParticipants(room);
+        notify(`Watching all participants in room ${room}. New participants will be watched automatically.`);
+        logEvent(`Watching whole room ${room}`, { participants: participants.length });
+        if (participants.length === 0) {
+          logEvent(`No participants to watch in room ${room}`, {});
+        }
+      }
+
+      async function stopWatchAll(room) {
+        state.watch.rooms.delete(String(room));
+        updateWatchAllControls();
+        await janus?.stopWatchingRoom?.(room);
+        renderRooms(state.rooms.items, state.rooms.participantsByRoom);
+        notify(`Stopped watching all participants in room ${room}.`);
+        logEvent(`Stopped watching whole room ${room}`, {});
+      }
+
+      function openPublishPrompt(room, createsRoom = false) {
+        state.workflow.publishRoom = room ? Number(room) : null;
+        state.workflow.publishCreatesRoom = Boolean(createsRoom);
+        if (els.publishTargetLabel) {
+          els.publishTargetLabel.textContent = createsRoom
+            ? "Create room and publish"
+            : `Publish to room ${state.workflow.publishRoom}`;
+        }
+        revealWindow("controls", { from: createsRoom ? "rooms" : "participants" });
+      }
+
+      function resetPublishPrompt() {
+        state.workflow.publishRoom = null;
+        state.workflow.publishCreatesRoom = false;
+        closeWindow("controls");
+      }
+
+      function setRecordingState(recording) {
+        if (!els.recordingState) {
+          return;
+        }
+        if (recording === true) {
+          els.recordingState.textContent = "on";
+          els.recordingState.className = "status-pill";
+        } else if (recording === false) {
+          els.recordingState.textContent = "off";
+          els.recordingState.className = "status-pill";
+        } else {
+          els.recordingState.textContent = "unknown";
+          els.recordingState.className = "status-pill warn";
+        }
+      }
+
+      function updateRecordingStateFromRooms() {
+        const selected = state.rooms.items.find((room) => Number(room.room || room.id) === Number(state.selection.roomId));
+        setRecordingState(selected && Object.prototype.hasOwnProperty.call(selected, "record") ? Boolean(selected.record) : null);
+      }
+
+      function setForwardTarget(room, id, display) {
+        state.workflow.forwardTarget = { room: Number(room), id: Number(id), display: display || `participant ${id}` };
+        if (els.rtpTargetName) {
+          els.rtpTargetName.textContent = state.workflow.forwardTarget.display;
+        }
+        if (els.rtpTargetMeta) {
+          els.rtpTargetMeta.textContent = `Room ${state.workflow.forwardTarget.room} · participant ${state.workflow.forwardTarget.id}`;
+        }
+        if (els.startForwardButton) {
+          els.startForwardButton.disabled = false;
+        }
+      }
+
+      function clearForwardTarget() {
+        state.workflow.forwardTarget = null;
+        if (els.rtpTargetName) {
+          els.rtpTargetName.textContent = "No participant selected";
+        }
+        if (els.rtpTargetMeta) {
+          els.rtpTargetMeta.textContent = "Use Forward RTP on a participant row.";
+        }
+        if (els.startForwardButton) {
+          els.startForwardButton.disabled = true;
+        }
+      }
+
+      function validUdpPort(value) {
+        if (!/^\d+$/.test(value)) {
+          return false;
+        }
+        const port = Number(value);
+        return Number.isInteger(port) && port >= 1 && port <= 65535;
+      }
+
+      function validateForwardingInputs() {
+        const host = els.rtpHost.value.trim();
+        const audioPort = els.rtpAudioPort.value.trim();
+        const videoPort = els.rtpVideoPort.value.trim();
+        if (!host) {
+          throw new Error("Enter the receiver IP or hostname before starting forwarding");
+        }
+        if (!audioPort && !videoPort) {
+          throw new Error("Enter at least one RTP port before starting forwarding");
+        }
+        if (audioPort && !validUdpPort(audioPort)) {
+          throw new Error("Audio port must be a number from 1 to 65535");
+        }
+        if (videoPort && !validUdpPort(videoPort)) {
+          throw new Error("Video port must be a number from 1 to 65535");
+        }
+        return { host, audioPort, videoPort };
+      }
+
+      function updateRtpCommandExamples() {
+        if (!els.rtpCommandExamples) {
+          return;
+        }
+        const audioPort = els.rtpAudioPort.value.trim();
+        const videoPort = els.rtpVideoPort.value.trim();
+        const lines = ["# Run this on the RTP receiver machine before starting forwarding."];
+        if (audioPort && validUdpPort(audioPort)) {
+          lines.push(`Audio listens on UDP ${audioPort}`);
+        }
+        if (videoPort && validUdpPort(videoPort)) {
+          lines.push(`Video listens on UDP ${videoPort}`);
+        }
+        lines.push("", "cat >/tmp/janus-forward.sdp <<'SDP'", "v=0", "c=IN IP4 0.0.0.0");
+        if (audioPort && validUdpPort(audioPort)) {
+          lines.push(`m=audio ${audioPort} RTP/AVP 111`, "a=rtpmap:111 opus/48000/2");
+        }
+        if (videoPort && validUdpPort(videoPort)) {
+          lines.push(`m=video ${videoPort} RTP/AVP 100`, "a=rtpmap:100 VP8/90000");
+        }
+        lines.push("SDP", "ffplay -protocol_whitelist file,udp,rtp -i /tmp/janus-forward.sdp");
+        els.rtpCommandExamples.textContent = lines.join("\n");
+      }
+
+      function renderMediaEvents() {
+        if (!els.mediaEvents) {
+          return;
+        }
+        els.mediaEvents.hidden = state.media.events.length === 0;
+        els.mediaEvents.innerHTML = state.media.events.map((entry) => `<p class="meta-line">${escapeHtml(entry)}</p>`).join("");
+      }
+
+      function addMediaEvent(message) {
+        state.media.events.unshift(`${new Date().toLocaleTimeString()} ${message}`);
+        state.media.events.splice(6);
+        renderMediaEvents();
+      }
+
+      function openForwardTarget(room, id, display) {
+        setForwardTarget(room, id, display);
+        revealWindow("exfil");
+        if (!els.rtpHost.value.trim()) {
+          notify(`RTP target set to ${display}. Enter the receiver IP or hostname before starting forwarding.`, "warn");
+        } else {
+          notify(`RTP target set to ${display}. Confirm destination and start forwarding.`);
+        }
+      }
+
+      function mediaFeeds() {
+        const localFeeds = janus ? janus.joinedHandles.map((joined) => ({ ...joined, local: true, key: `local:${joined.room}:${joined.publisherId || joined.handleId}`, display: "operator console" })) : [];
+        const remoteFeeds = janus ? [...janus.remoteFeeds.values()] : [];
+        return [...localFeeds, ...remoteFeeds];
+      }
+
+      function focusedFeed() {
+        return mediaFeeds().find((feed) => feed.key === state.media.focusedFeedKey) || null;
+      }
+
+      function focusWindowOpen() {
+        return document.querySelector('[data-window="focus"]')?.classList.contains("is-open") || false;
+      }
+
+      function renderFocusedFeed() {
+        const feed = focusedFeed();
+        if (!els.focusVideo || !els.focusStreamTitle || !els.focusStreamMeta || !els.focusActions) {
+          return;
+        }
+        if (!feed) {
+          els.focusVideo.srcObject = null;
+          els.focusStreamTitle.textContent = "No focused stream";
+          els.focusStreamMeta.textContent = "Use Open focus on a media tile.";
+          els.focusActions.innerHTML = "";
+          return;
+        }
+        els.focusVideo.muted = Boolean(feed.local || feed.muted);
+        els.focusVideo.srcObject = feed.stream;
+        els.focusStreamTitle.textContent = feed.local ? "Operator published stream" : (feed.display || `participant ${feed.feed}`);
+        els.focusStreamMeta.textContent = feed.local
+          ? `Publishing as ID ${feed.publisherId || "unknown"} in room ${feed.room}`
+          : `Room ${feed.room} · participant ${feed.feed}`;
+        els.focusActions.innerHTML = feed.local
+          ? `<button type="button" class="secondary-button" data-action="fullscreen-feed" data-feed-key="${escapeHtml(feed.key)}">Fullscreen</button>
+             <button type="button" class="secondary-button" data-action="leave-publish" data-room="${escapeHtml(feed.room)}" data-id="${escapeHtml(feed.publisherId || "")}">Leave</button>`
+          : `<button type="button" class="secondary-button" data-action="${feed.paused ? "resume-watch" : "pause-watch"}" data-feed-key="${escapeHtml(feed.key)}">${feed.paused ? "Resume" : "Pause"}</button>
+             <button type="button" class="secondary-button" data-action="toggle-mute" data-feed-key="${escapeHtml(feed.key)}">${feed.muted ? "Unmute" : "Mute"}</button>
+             <button type="button" class="secondary-button" data-action="fullscreen-feed" data-feed-key="${escapeHtml(feed.key)}">Fullscreen</button>
+             <button type="button" class="secondary-button" data-action="stop-watch" data-feed-key="${escapeHtml(feed.key)}">Stop watching</button>
+             <button type="button" data-action="forward" data-room="${escapeHtml(feed.room)}" data-id="${escapeHtml(feed.feed)}" data-display="${escapeHtml(feed.display || `participant ${feed.feed}`)}">Forward RTP</button>
+             <button type="button" class="danger-button" data-action="kick" data-room="${escapeHtml(feed.room)}" data-id="${escapeHtml(feed.feed)}" data-display="${escapeHtml(feed.display || `participant ${feed.feed}`)}">Disconnect</button>`;
+      }
+
+      function openFocusFeed(key) {
+        state.media.focusedFeedKey = key;
+        renderFocusedFeed();
+        renderMediaFeeds();
+        revealWindow("focus", { from: "media" });
+      }
+
+      function renderMediaFeeds() {
+        const feeds = mediaFeeds();
+        els.mediaCount.textContent = feeds.length === 1 ? "1 feed" : `${feeds.length} feeds`;
+        if (els.feedReadout) {
+          els.feedReadout.textContent = String(feeds.length);
+        }
+        if (feeds.length === 0) {
+          state.media.focusedFeedKey = null;
+          els.mediaGrid.innerHTML = '<p class="hint">Use Watch on a participant to subscribe to their media.</p>';
+          renderFocusedFeed();
+          return;
+        }
+        els.mediaGrid.innerHTML = "";
+        for (const feed of feeds) {
+          const tile = document.createElement("div");
+          tile.className = "media-tile";
+          const mutedByFocus = !feed.local && focusWindowOpen() && state.media.focusedFeedKey === feed.key;
+          tile.classList.toggle("is-selected", state.media.focusedFeedKey === feed.key);
+          tile.classList.toggle("is-muted", Boolean(!feed.local && feed.muted));
+          tile.classList.toggle("is-focus-muted", mutedByFocus && !feed.muted);
+          tile.classList.toggle("is-paused", Boolean(!feed.local && feed.paused));
+          tile.dataset.feedKey = feed.key;
+          const video = document.createElement("video");
+          video.autoplay = true;
+          video.playsInline = true;
+          video.controls = true;
+          video.muted = Boolean(feed.local || feed.muted || mutedByFocus);
+          video.srcObject = feed.stream;
+          const label = document.createElement("span");
+          label.textContent = feed.local
+            ? `You are publishing as ID ${feed.publisherId || "unknown"} in room ${feed.room}`
+            : `${feed.display || `participant ${feed.feed}`} in room ${feed.room}`;
+          const actions = document.createElement("div");
+          actions.className = "row-actions";
+          actions.innerHTML = feed.local
+            ? `<button type="button" class="secondary-button" data-action="focus-feed" data-feed-key="${escapeHtml(feed.key)}">Open focus</button>
+               <button type="button" class="secondary-button" data-action="fullscreen-feed" data-feed-key="${escapeHtml(feed.key)}">Fullscreen</button>
+               <button type="button" class="secondary-button" data-action="leave-publish" data-room="${escapeHtml(feed.room)}" data-id="${escapeHtml(feed.publisherId || "")}">Leave</button>`
+            : `<button type="button" class="secondary-button" data-action="stop-watch" data-feed-key="${escapeHtml(feed.key)}">Stop watching</button>
+               <button type="button" class="secondary-button" data-action="${feed.paused ? "resume-watch" : "pause-watch"}" data-feed-key="${escapeHtml(feed.key)}">${feed.paused ? "Resume" : "Pause"}</button>
+               <button type="button" class="secondary-button" data-action="toggle-mute" data-feed-key="${escapeHtml(feed.key)}">${feed.muted ? "Unmute" : "Mute"}</button>
+               <button type="button" class="secondary-button" data-action="focus-feed" data-feed-key="${escapeHtml(feed.key)}">Open focus</button>
+               <button type="button" class="secondary-button" data-action="fullscreen-feed" data-feed-key="${escapeHtml(feed.key)}">Fullscreen</button>
+               <button type="button" data-action="forward" data-room="${escapeHtml(feed.room)}" data-id="${escapeHtml(feed.feed)}" data-display="${escapeHtml(feed.display || `participant ${feed.feed}`)}">Forward RTP</button>
+               <button type="button" class="danger-button" data-action="kick" data-room="${escapeHtml(feed.room)}" data-id="${escapeHtml(feed.feed)}" data-display="${escapeHtml(feed.display || `participant ${feed.feed}`)}">Disconnect</button>`;
+          tile.append(video, label, actions);
+          els.mediaGrid.appendChild(tile);
+        }
+        renderFocusedFeed();
+      }
+
+      function renderForwarders() {
+        const forwarders = janus ? [...janus.forwarders.values()] : [];
+        if (!els.forwarderList) {
+          return;
+        }
+        if (forwarders.length === 0) {
+          els.forwarderList.innerHTML = '<p class="hint">No active RTP forwarders tracked by this console.</p>';
+          return;
+        }
+        els.forwarderList.innerHTML = forwarders.map((forwarder) => `
+          <div class="participant-row">
+            <div>
+              <strong>${escapeHtml(forwarder.display || `participant ${forwarder.publisherId}`)}</strong><br>
+              <small>${escapeHtml(forwarder.type || "stream")} ${escapeHtml(forwarder.streamId)} to ${escapeHtml(forwarder.host)}:${escapeHtml(forwarder.port)}</small>
+            </div>
+            <div class="row-actions">
+              <button type="button" class="secondary-button danger-button" data-action="stop-forwarder" data-room="${escapeHtml(forwarder.room)}" data-publisher="${escapeHtml(forwarder.publisherId)}" data-stream="${escapeHtml(forwarder.streamId)}">Stop</button>
+            </div>
+          </div>
+        `).join("");
+      }
+
+      function confirmAction(message) {
+        if (!els.operatorConfirm || !els.operatorConfirmMessage) {
+          return Promise.resolve(false);
+        }
+        if (pendingConfirmation) {
+          pendingConfirmation.resolve(false);
+          pendingConfirmation = null;
+        }
+        els.operatorConfirmMessage.textContent = message;
+        els.operatorConfirm.hidden = false;
+        els.operatorConfirmOk?.focus();
+        return new Promise((resolve) => {
+          pendingConfirmation = { resolve };
+        });
+      }
+
+      function resolveConfirmation(value) {
+        if (!pendingConfirmation) {
+          return;
+        }
+        const { resolve } = pendingConfirmation;
+        pendingConfirmation = null;
+        if (els.operatorConfirm) {
+          els.operatorConfirm.hidden = true;
+        }
+        resolve(Boolean(value));
+      }
+
+      function scheduleRefresh(reason) {
+        if (!janus || refreshDebounceTimer) {
+          return;
+        }
+        const refreshRoomsEnabled = Boolean(els.autoRefreshRooms?.checked);
+        const refreshSelectedEnabled = Boolean(state.selection.roomId && (els.autoRefreshParticipants?.checked || state.watch.rooms.has(String(state.selection.roomId))));
+        if (!refreshRoomsEnabled && !refreshSelectedEnabled) {
+          return;
+        }
+        refreshDebounceTimer = window.setTimeout(() => {
+          refreshDebounceTimer = null;
+          const refresh = refreshRoomsEnabled ? refreshRooms() : refreshSelectedRoom();
+          refresh.catch((error) => logEvent(`${reason || "Event"} refresh failed`, error.message));
+        }, 750);
+      }
+
+      function frontendOrigin() {
+        const explicit = els.createFrontendUrl.value.trim();
+        if (explicit) {
+          return explicit.replace(/\/+$/, "");
+        }
+        try {
+          const url = new URL(els.janusUrl.value.trim());
+          if (url.protocol === "wss:") {
+            return `https://${url.host}`;
+          }
+          if (url.protocol === "ws:") {
+            return `http://${url.host}`;
+          }
+        } catch {
+          // Fall back below.
+        }
+        if (["http:", "https:"].includes(window.location.protocol)) {
+          return window.location.origin;
+        }
+        throw new Error("Enter the frontend URL so the built-in video can be loaded");
+      }
+
+      async function builtinVideoStream() {
+        if (builtinVideoElement) {
+          builtinVideoElement.pause();
+          builtinVideoElement.remove();
+        }
+        const video = document.createElement("video");
+        video.crossOrigin = "anonymous";
+        video.src = `${frontendOrigin()}/media/big-buck-bunny-attacker.webm`;
+        video.loop = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.preload = "auto";
+        video.style.position = "fixed";
+        video.style.left = "-640px";
+        video.style.top = "0";
+        video.style.width = "640px";
+        video.style.height = "360px";
+        video.style.opacity = "0.01";
+        video.style.pointerEvents = "none";
+        document.body.appendChild(video);
+        builtinVideoElement = video;
+        await video.play();
+        if (!video.captureStream) {
+          throw new Error("This browser does not support video.captureStream()");
+        }
+        return video.captureStream();
+      }
+
+      async function selectedPublishStream() {
+        const source = els.publishSource.value;
+        if (source === "screen") {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            audio: true,
+            video: {
+              width: { max: 1280 },
+              height: { max: 720 },
+              frameRate: { ideal: 15, max: 20 },
+            },
+          });
+          stream.getVideoTracks().forEach((track) => {
+            track.contentHint = "detail";
+          });
+          return stream;
+        }
+        if (source === "camera") {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 30, max: 30 },
+            },
+          });
+          stream.getVideoTracks().forEach((track) => {
+            track.contentHint = "motion";
+          });
+          return stream;
+        }
+        if (source === "file") {
+          const file = els.videoFile.files[0];
+          if (!file) {
+            throw new Error("Choose a video file first");
+          }
+          const video = document.createElement("video");
+          video.src = URL.createObjectURL(file);
+          video.loop = true;
+          video.muted = true;
+          video.playsInline = true;
+          await video.play();
+          if (!video.captureStream) {
+            throw new Error("This browser does not support video.captureStream()");
+          }
+          return video.captureStream();
+        }
+        return builtinVideoStream();
+      }
+
+      function participantCountForRoom(room, participantsByRoom) {
+        const id = room.room || room.id;
+        const cached = participantsByRoom.get(String(id));
+        const reportedValue = room.num_participants ?? room.participants;
+        if (reportedValue !== undefined && reportedValue !== null) {
+          const reported = Number(reportedValue);
+          if (Number.isFinite(reported)) {
+            return reported;
+          }
+        }
+        return cached ? cached.length : 0;
+      }
+
+      function participantChips(room, participantsByRoom) {
+        const id = room.room || room.id;
+        const participants = participantsByRoom.get(String(id)) || [];
+        if (participants.length === 0) {
+          return '<span class="chip">participants not loaded</span>';
+        }
+        const chips = participants.slice(0, 4).map((participant) => {
+          const participantId = participant.id || participant.publisher;
+          return `<span class="chip">${escapeHtml(participant.display || `participant ${participantId}`)}</span>`;
+        });
+        if (participants.length > chips.length) {
+          chips.push(`<span class="chip">+${participants.length - chips.length} more</span>`);
+        }
+        return chips.join("");
+      }
+
+      function renderRooms(rooms, participantsByRoom) {
+        const visibleRooms = els.activeRoomsOnly.checked
+          ? rooms.filter((room) => participantCountForRoom(room, participantsByRoom) > 0)
+          : rooms;
+        const renderedRooms = visibleRooms.slice(0, ROOM_RENDER_LIMIT);
+        els.roomCount.textContent = visibleRooms.length === 1 ? "1 room" : `${visibleRooms.length} rooms`;
+        if (visibleRooms.length === 0) {
+          els.roomList.innerHTML = els.activeRoomsOnly.checked
+            ? '<p class="hint">No rooms with participants returned by Janus.</p>'
+            : '<p class="hint">No rooms returned by Janus.</p>';
+          return;
+        }
+
+        const rows = renderedRooms.map((room) => {
+          const id = room.room || room.id;
+          const participantCount = participantCountForRoom(room, participantsByRoom);
+          const participantSummary = participantChips(room, participantsByRoom);
+          const selected = Number(id) === Number(state.selection.roomId) ? " selected" : "";
+          return `
+            <div class="room-row${selected}">
+              <div>
+                <div class="row-title"><strong>${escapeHtml(id)}</strong><span class="status-pill">${participantCount} participant${participantCount === 1 ? "" : "s"}</span></div>
+                <div class="meta-line">${escapeHtml(room.description || "VideoRoom")}</div>
+                <div class="participant-chips">${participantSummary}</div>
+              </div>
+              <div class="row-actions">
+                <button type="button" data-action="view" data-room="${escapeHtml(id)}">Select</button>
+                <button type="button" class="${state.watch.rooms.has(String(id)) ? "watch-active" : ""}" data-action="${state.watch.rooms.has(String(id)) ? "stop-watch-all" : "watch-all"}" data-room="${escapeHtml(id)}">${state.watch.rooms.has(String(id)) ? "Stop watch all" : "Watch all"}</button>
+                <button type="button" data-action="join" data-room="${escapeHtml(id)}">Publish here</button>
+                <button type="button" class="danger-button" data-action="destroy" data-room="${escapeHtml(id)}">Destroy</button>
+              </div>
+            </div>
+          `;
+        });
+
+        if (visibleRooms.length > renderedRooms.length) {
+          rows.push(`<p class="hint">Showing ${ROOM_RENDER_LIMIT} of ${visibleRooms.length} rooms. Select "Only rooms with participants" to narrow the list.</p>`);
+        }
+
+        els.roomList.innerHTML = rows.join("");
+        updateWatchAllControls();
+      }
+
+      function renderParticipants(room, participants) {
+        els.participantCount.textContent = participants.length === 1 ? "1 user" : `${participants.length} users`;
+        if (!room) {
+          els.participantList.innerHTML = '<p class="hint">Select a room to view participants.</p>';
+          return;
+        }
+        if (participants.length === 0) {
+          els.participantList.innerHTML = `<p class="hint">No participants returned for room ${escapeHtml(room)}.</p>`;
+          return;
+        }
+        els.participantList.innerHTML = participants.map((participant) => {
+          const id = participant.id || participant.publisher;
+          const display = participant.display || `participant ${id}`;
+          const ownPublisher = janus?.isOwnPublisher?.(Number(room), Number(id));
+          const publisherState = participant.publisher ? "publisher" : "participant";
+          const talkingState = participant.talking ? '<span class="status-pill">talking</span>' : '';
+          const ownState = ownPublisher ? '<span class="status-pill">operator</span>' : '';
+          const mediaActions = ownPublisher ? "" : `
+                <button type="button" data-action="watch" data-room="${escapeHtml(room)}" data-id="${escapeHtml(id)}" data-display="${escapeHtml(display)}">Watch</button>
+                <button type="button" data-action="forward" data-room="${escapeHtml(room)}" data-id="${escapeHtml(id)}" data-display="${escapeHtml(display)}">Forward RTP</button>`;
+          return `
+            <div class="participant-row">
+              <div>
+                <div class="row-title"><strong>${escapeHtml(display)}</strong><span class="status-pill">${publisherState}</span>${ownState}${talkingState}</div>
+                <div class="meta-line">ID ${escapeHtml(id)} · room ${escapeHtml(room)}</div>
+              </div>
+              <div class="row-actions">
+                ${mediaActions}
+                <button type="button" class="danger-button" data-action="${ownPublisher ? "leave-self" : "kick"}" data-room="${escapeHtml(room)}" data-id="${escapeHtml(id)}" data-display="${escapeHtml(display)}">${ownPublisher ? "Leave" : "Disconnect"}</button>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      class JanusConsole {
+        constructor(url) {
+          this.url = url;
+          this.ws = null;
+          this.sessionId = null;
+          this.controlHandle = null;
+          this.transactions = new Map();
+          this.waiters = [];
+          this.joinedHandles = [];
+          this.remoteFeeds = new Map();
+          this.forwarders = new Map();
+          this.keepaliveTimer = null;
+        }
+
+        async connect() {
+          this.ws = new WebSocket(this.url, "janus-protocol");
+          this.ws.addEventListener("message", (event) => this.onMessage(JSON.parse(event.data)));
+          await new Promise((resolve, reject) => {
+            this.ws.addEventListener("open", resolve, { once: true });
+            this.ws.addEventListener("error", reject, { once: true });
+          });
+
+          const created = await this.request({ janus: "create" });
+          this.sessionId = created.data.id;
+          this.controlHandle = await this.attach();
+          this.startKeepalive();
+        }
+
+        startKeepalive() {
+          this.stopKeepalive();
+          this.keepaliveTimer = window.setInterval(() => {
+            if (this.sessionId && this.ws?.readyState === WebSocket.OPEN) {
+              this.request({ janus: "keepalive", session_id: this.sessionId }).catch((error) => logEvent("Janus keepalive failed", error.message));
+            }
+          }, 30000);
+        }
+
+        stopKeepalive() {
+          if (this.keepaliveTimer) {
+            window.clearInterval(this.keepaliveTimer);
+            this.keepaliveTimer = null;
+          }
+        }
+
+        attach() {
+          return this.request({
+            janus: "attach",
+            plugin: "janus.plugin.videoroom",
+            session_id: this.sessionId,
+          }).then((response) => response.data.id);
+        }
+
+        detach(handleId) {
+          if (!handleId || !this.sessionId || this.ws?.readyState !== WebSocket.OPEN) {
+            return Promise.resolve();
+          }
+          return this.request({
+            janus: "detach",
+            session_id: this.sessionId,
+            handle_id: handleId,
+          }).catch(() => {});
+        }
+
+        request(message) {
+          const transaction = randomId();
+          this.ws.send(JSON.stringify({ ...message, transaction }));
+          return new Promise((resolve, reject) => {
+            this.transactions.set(transaction, { resolve, reject });
+            window.setTimeout(() => {
+              if (this.transactions.has(transaction)) {
+                this.transactions.delete(transaction);
+                reject(new Error("Janus transaction timed out"));
+              }
+            }, 20000);
+          });
+        }
+
+        async message(handleId, body, predicate = (message) => message.plugindata?.data) {
+          const wait = this.waitFor(handleId, predicate);
+          const response = await this.request({
+            janus: "message",
+            session_id: this.sessionId,
+            handle_id: handleId,
+            body,
+          }).catch((error) => {
+            this.cancelWait(wait);
+            throw error;
+          });
+          if (response.sender === handleId && predicate(response)) {
+            this.cancelWait(wait);
+            return response;
+          }
+          return wait;
+        }
+
+        async messageWithJsep(handleId, body, jsep, predicate = (message) => message.plugindata?.data) {
+          const wait = this.waitFor(handleId, predicate);
+          const response = await this.request({
+            janus: "message",
+            session_id: this.sessionId,
+            handle_id: handleId,
+            body,
+            jsep,
+          }).catch((error) => {
+            this.cancelWait(wait);
+            throw error;
+          });
+          if (response.sender === handleId && predicate(response)) {
+            this.cancelWait(wait);
+            return response;
+          }
+          return wait;
+        }
+
+        trickle(handleId, candidate) {
+          return this.request({
+            janus: "trickle",
+            session_id: this.sessionId,
+            handle_id: handleId,
+            candidate: candidate || { completed: true },
+          }).catch(() => {});
+        }
+
+        waitFor(handleId, predicate, timeout = 20000) {
+          let waiter;
+          const promise = new Promise((resolve, reject) => {
+            waiter = { handleId, predicate, resolve, reject, timeoutId: null };
+            this.waiters.push(waiter);
+            waiter.timeoutId = window.setTimeout(() => {
+              const index = this.waiters.indexOf(waiter);
+              if (index !== -1) {
+                this.waiters.splice(index, 1);
+                reject(new Error("Janus event timed out"));
+              }
+            }, timeout);
+          });
+          promise.waiter = waiter;
+          return promise;
+        }
+
+        cancelWait(wait) {
+          const waiter = wait?.waiter;
+          if (!waiter) {
+            return;
+          }
+          const index = this.waiters.indexOf(waiter);
+          if (index !== -1) {
+            this.waiters.splice(index, 1);
+          }
+          if (waiter.timeoutId) {
+            window.clearTimeout(waiter.timeoutId);
+            waiter.timeoutId = null;
+          }
+        }
+
+        async createRoom(room) {
+          return this.message(this.controlHandle, {
+            request: "create",
+            room,
+            description: `operator-${room}`,
+            publishers: 24,
+            bitrate: 2500000,
+            fir_freq: 10,
+            audiocodec: "opus",
+            videocodec: "vp8,h264",
+            record: false,
+            permanent: false,
+          }, (message) => Boolean(message.plugindata?.data?.videoroom));
+        }
+
+        async listRooms() {
+          return this.message(this.controlHandle, { request: "list" }, (message) => Array.isArray(message.plugindata?.data?.list));
+        }
+
+        async joinRoom(room) {
+          const handleId = await this.attach();
+          const joined = await this.message(handleId, {
+            request: "join",
+            ptype: "publisher",
+            room,
+            display: "operator console",
+          }, (message) => message.plugindata?.data?.videoroom === "joined");
+          const published = await this.publishSelectedMedia(handleId, room);
+          const publisherId = joined.plugindata?.data?.id;
+          this.joinedHandles.push({ handleId, pc: published.pc, stream: published.stream, room, publisherId });
+          renderMediaFeeds();
+          return joined;
+        }
+
+        async publishSelectedMedia(handleId, room) {
+          const stream = await selectedPublishStream();
+          const pc = new RTCPeerConnection();
+          pc.onicecandidate = (event) => this.trickle(handleId, event.candidate);
+          const source = els.publishSource.value;
+          const senders = stream.getTracks().map((track) => {
+            if (track.kind === "video" && !track.contentHint) {
+              track.contentHint = source === "screen" ? "detail" : "motion";
+            }
+            return pc.addTrack(track, stream);
+          });
+          for (const sender of senders) {
+            if (sender.track?.kind !== "video") {
+              continue;
+            }
+            const params = sender.getParameters();
+            params.encodings = params.encodings && params.encodings.length > 0 ? params.encodings : [{}];
+            params.encodings[0].maxBitrate = source === "screen" ? 2500000 : 1800000;
+            params.encodings[0].maxFramerate = source === "screen" ? 20 : 30;
+            await sender.setParameters(params).catch(() => {});
+          }
+
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          const hasAudio = stream.getAudioTracks().length > 0;
+          const hasVideo = stream.getVideoTracks().length > 0;
+          const published = await this.messageWithJsep(handleId, {
+            request: "publish",
+            audio: hasAudio,
+            video: hasVideo,
+            data: false,
+          }, pc.localDescription, (message) => Boolean(message.jsep));
+          await pc.setRemoteDescription(published.jsep);
+          logEvent(`Published ${els.publishSource.value} media in ${room}`, published.plugindata?.data || published);
+          return { pc, stream };
+        }
+
+        async listParticipants(room) {
+          return this.message(this.controlHandle, {
+            request: "listparticipants",
+            room,
+          }, (message) => Array.isArray(message.plugindata?.data?.participants));
+        }
+
+        async watchParticipant(room, feed, display) {
+          const key = `${room}:${feed}`;
+          if (this.remoteFeeds.has(key)) {
+            return this.remoteFeeds.get(key);
+          }
+
+          const handleId = await this.attach();
+          const pc = new RTCPeerConnection();
+          const stream = new MediaStream();
+          pc.onicecandidate = (event) => this.trickle(handleId, event.candidate);
+          pc.ontrack = (event) => {
+            event.streams[0].getTracks().forEach((track) => stream.addTrack(track));
+          };
+
+          const offer = await this.message(handleId, {
+            request: "join",
+            ptype: "subscriber",
+            room,
+            feed,
+          }, (message) => Boolean(message.jsep));
+          await pc.setRemoteDescription(offer.jsep);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          await this.messageWithJsep(handleId, { request: "start", room }, pc.localDescription);
+
+          const watched = { key, room, feed, display, handleId, pc, stream };
+          this.remoteFeeds.set(key, watched);
+          renderMediaFeeds();
+          logEvent(`Watching participant ${feed} in room ${room}`, offer.plugindata?.data || offer);
+          return watched;
+        }
+
+        async stopWatching(key, options = {}) {
+          const disableWatchAll = options.disableWatchAll !== false;
+          const feed = this.remoteFeeds.get(key);
+          if (!feed) {
+            return;
+          }
+          if (disableWatchAll) {
+            state.watch.rooms.delete(String(feed.room));
+            updateWatchAllControls();
+            renderRooms(state.rooms.items, state.rooms.participantsByRoom);
+          }
+          this.remoteFeeds.delete(key);
+          if (state.media.focusedFeedKey === key) {
+            state.media.focusedFeedKey = null;
+          }
+          feed.pc?.close();
+          await this.message(feed.handleId, { request: "leave" }).catch(() => {});
+          await this.detach(feed.handleId);
+          renderMediaFeeds();
+        }
+
+        async pauseWatching(key) {
+          const feed = this.remoteFeeds.get(key);
+          if (!feed || feed.paused) {
+            return false;
+          }
+          await this.message(feed.handleId, { request: "pause", room: feed.room }).catch(() => {});
+          feed.paused = true;
+          renderMediaFeeds();
+          return true;
+        }
+
+        async resumeWatching(key) {
+          const feed = this.remoteFeeds.get(key);
+          if (!feed || !feed.paused) {
+            return false;
+          }
+          await this.message(feed.handleId, { request: "start", room: feed.room }).catch(() => {});
+          feed.paused = false;
+          renderMediaFeeds();
+          return true;
+        }
+
+        toggleFeedMute(key) {
+          const feed = this.remoteFeeds.get(key);
+          if (!feed) {
+            return false;
+          }
+          feed.muted = !feed.muted;
+          renderMediaFeeds();
+          return feed.muted;
+        }
+
+        async stopAllWatching() {
+          state.watch.rooms.clear();
+          state.media.focusedFeedKey = null;
+          for (const key of [...this.remoteFeeds.keys()]) {
+            await this.stopWatching(key).catch(() => {});
+          }
+          updateWatchAllControls();
+          renderMediaFeeds();
+        }
+
+        async stopWatchingRoom(room) {
+          for (const [key, feed] of [...this.remoteFeeds.entries()]) {
+            if (Number(feed.room) === Number(room)) {
+              await this.stopWatching(key, { disableWatchAll: false }).catch(() => {});
+            }
+          }
+          renderMediaFeeds();
+        }
+
+        isOwnPublisher(room, id) {
+          return this.joinedHandles.some((joined) => Number(joined.room) === Number(room) && Number(joined.publisherId) === Number(id));
+        }
+
+        async leavePublishedParticipant(room, id) {
+          const index = this.joinedHandles.findIndex((joined) => Number(joined.room) === Number(room) && Number(joined.publisherId) === Number(id));
+          if (index === -1) {
+            return false;
+          }
+          const [joined] = this.joinedHandles.splice(index, 1);
+          const localKey = `local:${joined.room}:${joined.publisherId || joined.handleId}`;
+          if (state.media.focusedFeedKey === localKey) {
+            state.media.focusedFeedKey = null;
+          }
+          joined.stream?.getTracks().forEach((track) => track.stop());
+          joined.pc?.close();
+          await this.message(joined.handleId, { request: "unpublish" }).catch(() => {});
+          await this.message(joined.handleId, { request: "leave" }).catch(() => {});
+          await this.detach(joined.handleId);
+          renderMediaFeeds();
+          return true;
+        }
+
+        async leaveAttackerSessions() {
+          for (const joined of this.joinedHandles.splice(0)) {
+            joined.stream?.getTracks().forEach((track) => track.stop());
+            joined.pc?.close();
+            await this.message(joined.handleId, { request: "unpublish" }).catch(() => {});
+            await this.message(joined.handleId, { request: "leave" }).catch(() => {});
+            await this.detach(joined.handleId);
+          }
+          await this.stopAllWatching();
+          renderMediaFeeds();
+        }
+
+        async disconnect() {
+          this.stopKeepalive();
+          await this.leaveAttackerSessions().catch(() => {});
+          if (this.controlHandle) {
+            await this.detach(this.controlHandle);
+          }
+          if (this.sessionId && this.ws?.readyState === WebSocket.OPEN) {
+            await this.request({ janus: "destroy", session_id: this.sessionId }).catch(() => {});
+          }
+          this.forwarders.clear();
+          renderForwarders();
+          this.transactions.clear();
+          this.waiters.splice(0);
+          this.ws?.close();
+        }
+
+        async kickParticipant(room, id) {
+          return this.message(this.controlHandle, {
+            request: "kick",
+            room,
+            id,
+          }, (message) => Boolean(message.plugindata?.data?.videoroom));
+        }
+
+        storeForwarders(room, publisherId, display, response) {
+          const forwarders = response.plugindata?.data?.forwarders || [];
+          for (const forwarder of forwarders) {
+            const streamId = forwarder.stream_id || forwarder.id;
+            if (!streamId) {
+              continue;
+            }
+            this.forwarders.set(String(streamId), {
+              room,
+              publisherId,
+              display,
+              streamId,
+              type: forwarder.type || "stream",
+              host: forwarder.host || "unknown",
+              port: forwarder.port || "unknown",
+            });
+          }
+          renderForwarders();
+        }
+
+        async rtpForward(room, publisherId, display, host, audioPort, videoPort) {
+          const body = {
+            request: "rtp_forward",
+            room,
+            publisher_id: publisherId,
+            host,
+          };
+          if (audioPort) {
+            body.audio_port = Number(audioPort);
+          }
+          if (videoPort) {
+            body.video_port = Number(videoPort);
+          }
+          const response = await this.message(this.controlHandle, body);
+          this.storeForwarders(room, publisherId, display, response);
+          return response;
+        }
+
+        async stopRtpForward(room, publisherId, streamId) {
+          const response = await this.message(this.controlHandle, {
+            request: "stop_rtp_forward",
+            room,
+            publisher_id: publisherId,
+            stream_id: Number(streamId),
+          });
+          this.forwarders.delete(String(streamId));
+          renderForwarders();
+          return response;
+        }
+
+        async listForwarders(room) {
+          const response = await this.message(this.controlHandle, {
+            request: "listforwarders",
+            room,
+          });
+          const publishers = response.plugindata?.data?.publishers || [];
+          this.forwarders.clear();
+          for (const publisher of publishers) {
+            for (const forwarder of publisher.forwarders || []) {
+              const streamId = forwarder.stream_id || forwarder.id;
+              if (!streamId) {
+                continue;
+              }
+              this.forwarders.set(String(streamId), {
+                room,
+                publisherId: publisher.publisher_id,
+                display: `participant ${publisher.publisher_id}`,
+                streamId,
+                type: forwarder.type || "stream",
+                host: forwarder.host || "unknown",
+                port: forwarder.port || "unknown",
+              });
+            }
+          }
+          renderForwarders();
+          return response;
+        }
+
+        async setRecording(room, record) {
+          return this.message(this.controlHandle, {
+            request: "enable_recording",
+            room,
+            record,
+          });
+        }
+
+        async destroyRoom(room) {
+          return this.message(this.controlHandle, {
+            request: "destroy",
+            room,
+            permanent: false,
+          }, (message) => Boolean(message.plugindata?.data?.videoroom));
+        }
+
+        onMessage(message) {
+          if (els.verboseJanusEvents.checked || message.janus === "error") {
+            logEvent("Janus event", message);
+          }
+          if (message.transaction && this.transactions.has(message.transaction)) {
+            const pending = this.transactions.get(message.transaction);
+            this.transactions.delete(message.transaction);
+            if (message.janus === "error") {
+              pending.reject(new Error(message.error?.reason || "Janus error"));
+            } else {
+              pending.resolve(message);
+            }
+          }
+
+          if (!message.sender) {
+            return;
+          }
+
+          const data = message.plugindata?.data;
+          if (data && (data.publishers || data.unpublished || data.leaving || data.destroyed || data.videoroom === "destroyed")) {
+            if (data.videoroom === "destroyed" || data.destroyed) {
+              addMediaEvent(`Room ${data.room || state.selection.roomId || "unknown"} was destroyed.`);
+            } else if (data.leaving) {
+              addMediaEvent(`Participant ${data.leaving} left room ${data.room || state.selection.roomId || "unknown"}.`);
+            } else if (data.unpublished) {
+              addMediaEvent(`Participant ${data.unpublished} stopped publishing in room ${data.room || state.selection.roomId || "unknown"}.`);
+            } else if (data.publishers?.length) {
+              addMediaEvent(`${data.publishers.length} new publisher${data.publishers.length === 1 ? "" : "s"} appeared in room ${data.room || state.selection.roomId || "unknown"}.`);
+            }
+            scheduleRefresh("Janus event");
+          }
+
+          for (const waiter of [...this.waiters]) {
+            if (waiter.handleId === message.sender && waiter.predicate(message)) {
+              this.waiters.splice(this.waiters.indexOf(waiter), 1);
+              if (waiter.timeoutId) {
+                window.clearTimeout(waiter.timeoutId);
+                waiter.timeoutId = null;
+              }
+              waiter.resolve(message);
+              return;
+            }
+          }
+        }
+      }
+
+      function autoWatchParticipants(room, participants) {
+        const roomKey = String(room);
+        if (!janus || !state.watch.rooms.has(roomKey)) {
+          return;
+        }
+        for (const participant of participants) {
+          if (participant.publisher === false) {
+            continue;
+          }
+          const id = participant.id || participant.publisher;
+          const feedKey = `${room}:${id}`;
+          if (!id || janus.isOwnPublisher(Number(room), Number(id)) || janus.remoteFeeds.has(feedKey) || state.watch.inFlightFeeds.has(feedKey)) {
+            continue;
+          }
+          state.watch.inFlightFeeds.add(feedKey);
+          janus.watchParticipant(Number(room), Number(id), participant.display || `participant ${id}`)
+            .then(() => notify(`Auto-watching ${participant.display || `participant ${id}`}.`))
+            .catch((error) => logEvent(`Auto-watch failed for ${id}`, error.message))
+            .finally(() => state.watch.inFlightFeeds.delete(feedKey));
+        }
+      }
+
+      async function refreshParticipants(room) {
+        const response = await janus.listParticipants(room);
+        const participants = response.plugindata?.data?.participants || [];
+        state.rooms.participantsByRoom.set(String(room), participants);
+        renderParticipants(room, participants);
+        if (els.participantsLastRefresh) {
+          els.participantsLastRefresh.textContent = `refreshed ${new Date().toLocaleTimeString()}`;
+        }
+        autoWatchParticipants(room, participants);
+        return participants;
+      }
+
+      async function refreshSelectedRoom() {
+        if (!state.selection.roomId) {
+          return [];
+        }
+        const room = Number(state.selection.roomId);
+        try {
+          const participants = await refreshParticipants(room);
+          renderRooms(state.rooms.items, state.rooms.participantsByRoom);
+          return participants;
+        } catch (error) {
+          logEvent(`Selected room ${room} participants refresh failed`, error.message);
+          state.rooms.participantsByRoom.set(String(room), []);
+          renderParticipants(room, []);
+          await refreshRooms().catch(() => {});
+          return [];
+        }
+      }
+
+      async function refreshParticipantsForRooms(rooms) {
+        const activeRooms = rooms
+          .filter((room) => participantCountForRoom(room, state.rooms.participantsByRoom) > 0)
+          .slice(0, ROOM_RENDER_LIMIT);
+        for (const room of activeRooms) {
+          const id = room.room || room.id;
+          try {
+            const response = await janus.listParticipants(Number(id));
+            state.rooms.participantsByRoom.set(String(id), response.plugindata?.data?.participants || []);
+          } catch {
+            if (!state.rooms.participantsByRoom.has(String(id))) {
+              state.rooms.participantsByRoom.set(String(id), []);
+            }
+          }
+        }
+      }
+
+      async function refreshRooms() {
+        if (state.rooms.refreshInFlight) {
+          return state.rooms.refreshInFlight;
+        }
+
+        state.rooms.refreshInFlight = (async () => {
+          const response = await janus.listRooms();
+          const rooms = response.plugindata?.data?.list || [];
+          state.rooms.items = rooms;
+
+          if (state.selection.roomId && !roomExists(rooms, state.selection.roomId)) {
+            clearSelectedRoom(`Room ${state.selection.roomId} is no longer available.`);
+          }
+
+          await refreshParticipantsForRooms(rooms);
+
+          if (state.selection.roomId) {
+            await refreshParticipants(Number(state.selection.roomId)).catch((error) => {
+              logEvent(`Selected room ${state.selection.roomId} participants refresh failed`, error.message);
+              state.rooms.participantsByRoom.set(String(state.selection.roomId), []);
+              renderParticipants(state.selection.roomId, []);
+            });
+          }
+
+          renderRooms(state.rooms.items, state.rooms.participantsByRoom);
+          updateRecordingStateFromRooms();
+          if (els.roomsLastRefresh) {
+            els.roomsLastRefresh.textContent = `refreshed ${new Date().toLocaleTimeString()}`;
+          }
+          if (!state.selection.roomId) {
+            renderParticipants(null, []);
+          }
+        })();
+
+        try {
+          return await state.rooms.refreshInFlight;
+        } finally {
+          state.rooms.refreshInFlight = null;
+        }
+      }
+
+      async function joinMeetingForWebSocket(frontend, code, displayName) {
+        const response = await fetch(`${frontend}/api/meetings/${encodeURIComponent(code)}/join`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ displayName }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || `meeting join failed with HTTP ${response.status}`);
+        }
+        if (!data.janus?.websocket) {
+          throw new Error("meeting join response did not include a Janus WebSocket URL");
+        }
+        return data;
+      }
+
+      async function createMeetingForWebSocket() {
+        const frontend = els.createFrontendUrl.value.trim().replace(/\/+$/, "");
+        const displayName = els.createDisplayName.value.trim() || "operator console";
+
+        if (!frontend) {
+          throw new Error("Enter frontend URL for the new meeting");
+        }
+
+        const createdResponse = await fetch(`${frontend}/api/meetings`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const created = await createdResponse.json().catch(() => ({}));
+        if (!createdResponse.ok) {
+          throw new Error(created.error || `meeting creation failed with HTTP ${createdResponse.status}`);
+        }
+
+        const code = created.meeting?.code;
+        if (!code) {
+          throw new Error("meeting creation response did not include a meeting code");
+        }
+
+        const joined = await joinMeetingForWebSocket(frontend, code, displayName);
+        logEvent("Created helper meeting and resolved WebSocket", { frontend, code, room: joined.meeting?.room, websocket: joined.janus.websocket });
+        return joined.janus.websocket;
+      }
+
+      async function start() {
+        let url = els.janusUrl.value.trim();
+
+        if (refreshTimer) {
+          window.clearInterval(refreshTimer);
+          refreshTimer = null;
+        }
+        if (watchRefreshTimer) {
+          window.clearInterval(watchRefreshTimer);
+          watchRefreshTimer = null;
+        }
+        if (refreshDebounceTimer) {
+          window.clearTimeout(refreshDebounceTimer);
+          refreshDebounceTimer = null;
+        }
+        if (janus) {
+          await janus.disconnect().catch(() => {});
+          janus = null;
+        }
+
+        resetSharedState();
+        setConnected(false);
+        renderParticipants(null, []);
+        renderMediaFeeds();
+        renderMediaEvents();
+        setStatus("Connecting...");
+
+        try {
+          if (!url) {
+            url = await createMeetingForWebSocket();
+            els.janusUrl.value = url;
+          }
+
+          janus = new JanusConsole(url);
+          await janus.connect();
+          state.connection.janusUrl = url;
+
+          setConnected(true);
+          setStatus("Connected", "live");
+          notify("Connected. Active rooms loaded.");
+          logEvent("Connected to Janus", { janus: url });
+
+          await refreshRooms();
+
+          refreshTimer = window.setInterval(() => {
+            if (els.autoRefreshRooms?.checked) {
+              refreshRooms().catch((error) => logEvent("Auto refresh failed", error.message));
+            } else if (els.autoRefreshParticipants?.checked && state.selection.roomId) {
+              refreshSelectedRoom().catch((error) => logEvent("Auto refresh failed", error.message));
+            }
+          }, AUTO_REFRESH_MS);
+
+          watchRefreshTimer = window.setInterval(() => {
+            if (state.selection.roomId && state.watch.rooms.has(String(state.selection.roomId))) {
+              refreshSelectedRoom().catch((error) => logEvent("Watch-all refresh failed", error.message));
+            }
+          }, WATCHED_ROOM_REFRESH_MS);
+        } catch (error) {
+          state.connection.error = error.message;
+          setStatus(error.message, "warn");
+          notify(`Connection failed: ${error.message}`, "warn");
+          logEvent("Connection failed", error.message);
+        }
+      }
+
+      els.traceToggle?.addEventListener("click", toggleTraceWindow);
+      updateTraceToggleButton();
+
+      els.operatorConfirmOk.addEventListener("click", () => resolveConfirmation(true));
+      els.operatorConfirmCancel.addEventListener("click", () => resolveConfirmation(false));
+      els.operatorConfirm.addEventListener("click", (event) => {
+        if (event.target === els.operatorConfirm) {
+          resolveConfirmation(false);
+        }
+      });
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && pendingConfirmation) {
+          resolveConfirmation(false);
+        }
+      });
+
+      els.connectButton.addEventListener("click", start);
+      els.showExfilButton.addEventListener("click", () => revealWindow("exfil"));
+      els.showRecordingButton.addEventListener("click", () => revealWindow("recording"));
+      els.refreshButton.addEventListener("click", () => {
+        revealWindow("rooms");
+        refreshRooms().catch((error) => logEvent("List rooms failed", error.message));
+      });
+      els.activeRoomsOnly.addEventListener("change", () => {
+        renderRooms(state.rooms.items, state.rooms.participantsByRoom);
+      });
+      els.publishSource.addEventListener("change", () => {
+        els.videoFileLabel.hidden = els.publishSource.value !== "file";
+      });
+      els.createRoomButton.addEventListener("click", () => openPublishPrompt(null, true));
+      els.joinSelectedButton.addEventListener("click", () => {
+        if (state.selection.roomId) {
+          openPublishPrompt(Number(state.selection.roomId), false);
+        }
+      });
+      els.publishCancelButton.addEventListener("click", resetPublishPrompt);
+      els.publishConfirmButton.addEventListener("click", async () => {
+        if (!janus) {
+          return;
+        }
+        try {
+          let room = state.workflow.publishRoom;
+          const createsRoom = state.workflow.publishCreatesRoom;
+          let created = null;
+          if (createsRoom) {
+            room = randomRoomId();
+            created = await janus.createRoom(room);
+          }
+          if (!room) {
+            throw new Error("No target room selected");
+          }
+          const joined = await janus.joinRoom(Number(room));
+          selectRoom(Number(room));
+          resetPublishPrompt();
+          notify(createsRoom ? `Created room ${room} and published operator media.` : `Publishing operator media in room ${room}.`);
+          if (created) {
+            logEvent(`Created room ${room}`, created.plugindata?.data || created);
+          }
+          logEvent(`Published operator media in room ${room}`, joined.plugindata?.data || joined);
+          await refreshRooms();
+        } catch (error) {
+          notify(`Publish failed: ${error.message}`, "warn");
+          logEvent("Publish failed", error.message);
+        }
+      });
+      els.watchRoomButton.addEventListener("click", async () => {
+        if (!state.selection.roomId) {
+          return;
+        }
+        const room = Number(state.selection.roomId);
+        try {
+          if (state.watch.rooms.has(String(room))) {
+            await stopWatchAll(room);
+          } else {
+            await startWatchAll(room);
+          }
+        } catch (error) {
+          notify(`Watch all action failed: ${error.message}`, "warn");
+          logEvent("Watch whole room action failed", error.message);
+        }
+      });
+      [els.rtpAudioPort, els.rtpVideoPort].forEach((input) => {
+        input?.addEventListener("input", updateRtpCommandExamples);
+      });
+      updateRtpCommandExamples();
+
+      els.copyRtpCommandsButton.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(els.rtpCommandExamples.textContent || "");
+          notify("Copied RTP receiver commands.");
+        } catch (error) {
+          notify(`Copy failed: ${error.message}`, "warn");
+          logEvent("Copy RTP receiver commands failed", error.message);
+        }
+      });
+
+      els.startForwardButton.addEventListener("click", async () => {
+        if (!state.workflow.forwardTarget) {
+          notify("Choose a participant with Forward RTP first.", "warn");
+          return;
+        }
+        const target = state.workflow.forwardTarget;
+        const originalLabel = els.startForwardButton.textContent;
+        try {
+          const { host, audioPort, videoPort } = validateForwardingInputs();
+          els.startForwardButton.disabled = true;
+          els.startForwardButton.textContent = "Starting...";
+          if (els.forwarderList) {
+            els.forwarderList.innerHTML = `
+              <div class="participant-row">
+                <div>
+                  <div class="row-title"><strong>${escapeHtml(target.display)}</strong><span class="status-pill warn">starting</span></div>
+                  <div class="meta-line">Forwarding to ${escapeHtml(host)} · audio ${escapeHtml(audioPort || "off")} · video ${escapeHtml(videoPort || "off")}</div>
+                </div>
+              </div>
+            `;
+          }
+          notify(`Starting RTP forwarding for ${target.display}...`);
+          const response = await janus.rtpForward(target.room, target.id, target.display, host, audioPort, videoPort);
+          await janus.listForwarders(target.room).catch(() => {});
+          notify(`RTP forwarding started for ${target.display}.`);
+          logEvent(`RTP forward requested for ${target.id}`, response.plugindata?.data || response);
+        } catch (error) {
+          notify(`Start forwarding failed: ${error.message}`, "warn");
+          logEvent("Start forwarding failed", error.message);
+        } finally {
+          els.startForwardButton.textContent = originalLabel;
+          els.startForwardButton.disabled = !state.workflow.forwardTarget;
+        }
+      });
+
+      els.listForwardersButton.addEventListener("click", async () => {
+        const room = state.workflow.forwardTarget?.room || state.selection.roomId;
+        if (!room) {
+          return;
+        }
+        try {
+          revealWindow("exfil");
+          const response = await janus.listForwarders(Number(room));
+          notify(`Forwarders refreshed for room ${room}.`);
+          logEvent(`RTP forwarders for room ${room}`, response.plugindata?.data || response);
+        } catch (error) {
+          notify(`Refresh forwarders failed: ${error.message}`, "warn");
+          logEvent("List forwarders failed", error.message);
+        }
+      });
+      els.recordOnButton.addEventListener("click", async () => {
+        if (!state.selection.roomId) {
+          return;
+        }
+        try {
+          revealWindow("recording");
+          const room = Number(state.selection.roomId);
+          if (!await confirmAction(`Start Janus room recording for room ${room}?`)) {
+            return;
+          }
+          const response = await janus.setRecording(room, true);
+          setRecordingState(true);
+          notify(`Janus recording started for room ${room}.`);
+          logEvent(`Enabled recording for room ${room}`, response.plugindata?.data || response);
+        } catch (error) {
+          notify(`Start recording failed: ${error.message}`, "warn");
+          logEvent("Enable recording failed", error.message);
+        }
+      });
+      els.recordOffButton.addEventListener("click", async () => {
+        if (!state.selection.roomId) {
+          return;
+        }
+        try {
+          revealWindow("recording");
+          const room = Number(state.selection.roomId);
+          if (!await confirmAction(`Stop Janus room recording for room ${room}?`)) {
+            return;
+          }
+          const response = await janus.setRecording(room, false);
+          setRecordingState(false);
+          notify(`Janus recording stopped for room ${room}.`);
+          logEvent(`Disabled recording for room ${room}`, response.plugindata?.data || response);
+        } catch (error) {
+          notify(`Stop recording failed: ${error.message}`, "warn");
+          logEvent("Disable recording failed", error.message);
+        }
+      });
+      els.kickAllButton.addEventListener("click", async () => {
+        if (!state.selection.roomId) {
+          return;
+        }
+        try {
+          const room = Number(state.selection.roomId);
+          if (!await confirmAction(`Destroy room ${room} and disconnect all participants?`)) {
+            return;
+          }
+          const response = await janus.destroyRoom(room);
+          notify(`Destroyed room ${room}.`);
+          addMediaEvent(`Room ${room} was destroyed.`);
+          logEvent(`Destroyed room ${room}`, response.plugindata?.data || response);
+          clearSelectedRoom(null);
+          await refreshRooms();
+        } catch (error) {
+          notify(`Destroy room failed: ${error.message}`, "warn");
+          logEvent("Destroy room failed", error.message);
+        }
+      });
+      els.leaveButton.addEventListener("click", async () => {
+        try {
+          await janus.leaveAttackerSessions();
+          notify("Left operator publisher/subscriber sessions.");
+          logEvent("Left operator publisher/subscriber sessions", {});
+          await refreshRooms();
+        } catch (error) {
+          notify(`Leave operator sessions failed: ${error.message}`, "warn");
+          logEvent("Leave operator sessions failed", error.message);
+        }
+      });
+
+      els.roomList.addEventListener("click", async (event) => {
+        const button = event.target.closest("button[data-room]");
+        if (!button) {
+          return;
+        }
+
+        const room = Number.parseInt(button.dataset.room, 10);
+        selectRoom(room);
+
+        try {
+          if (button.dataset.action === "join") {
+            openPublishPrompt(room, false);
+          } else if (button.dataset.action === "watch-all") {
+            await startWatchAll(room);
+          } else if (button.dataset.action === "stop-watch-all") {
+            await stopWatchAll(room);
+          } else if (button.dataset.action === "destroy") {
+            if (!await confirmAction(`Destroy room ${room} and disconnect all participants?`)) {
+              return;
+            }
+            const response = await janus.destroyRoom(room);
+            notify(`Destroyed room ${room}.`);
+            addMediaEvent(`Room ${room} was destroyed.`);
+            logEvent(`Destroyed room ${room}`, response.plugindata?.data || response);
+            if (state.selection.roomId === room) {
+              clearSelectedRoom(null);
+            }
+          }
+          await refreshParticipants(room).catch(() => {});
+          await refreshRooms();
+        } catch (error) {
+          notify(`Room action failed: ${error.message}`, "warn");
+          logEvent("Room action failed", error.message);
+        }
+      });
+
+      els.participantList.addEventListener("click", async (event) => {
+        const button = event.target.closest("button[data-room][data-id]");
+        if (!button) {
+          return;
+        }
+
+        try {
+          const room = Number.parseInt(button.dataset.room, 10);
+          const id = Number.parseInt(button.dataset.id, 10);
+          if (button.dataset.action === "watch") {
+            revealWindow("media");
+            await janus.watchParticipant(room, id, button.dataset.display || `participant ${id}`);
+            notify(`Watching ${button.dataset.display || `participant ${id}`}.`);
+          } else if (button.dataset.action === "forward") {
+            openForwardTarget(room, id, button.dataset.display || `participant ${id}`);
+          } else if (button.dataset.action === "leave-self") {
+            if (!await confirmAction(`Leave room ${room} as ${button.dataset.display || `participant ${id}`}?`)) {
+              return;
+            }
+            const left = await janus.leavePublishedParticipant(room, id);
+            notify(left ? `Left room ${room}.` : `Operator participant ${id} was already gone.`);
+            addMediaEvent(`Operator left room ${room}.`);
+            logEvent(`Operator left room ${room}`, { id, left });
+            await refreshParticipants(room);
+          } else {
+            if (!await confirmAction(`Disconnect ${button.dataset.display || `participant ${id}`} from room ${room}?`)) {
+              return;
+            }
+            const response = await janus.kickParticipant(room, id);
+            notify(`Disconnect requested for ${button.dataset.display || `participant ${id}`}.`);
+            addMediaEvent(`Disconnect requested for ${button.dataset.display || `participant ${id}`} in room ${room}.`);
+            logEvent(`Disconnect requested for ${id}`, response.plugindata?.data || response);
+            await refreshParticipants(room);
+          }
+        } catch (error) {
+          notify(`Participant action failed: ${error.message}`, "warn");
+          logEvent("Participant action failed", error.message);
+        }
+      });
+
+      async function handleMediaAction(button) {
+        if (!button || !janus) {
+          return;
+        }
+        try {
+          if (button.dataset.action === "leave-publish") {
+            const room = Number.parseInt(button.dataset.room, 10);
+            const id = Number.parseInt(button.dataset.id, 10);
+            const left = await janus.leavePublishedParticipant(room, id);
+            notify(left ? `Left room ${room}.` : "Published feed was already gone.");
+            addMediaEvent(`Operator left room ${room}.`);
+            logEvent(`Operator left room ${room}`, { id, left });
+            await refreshSelectedRoom();
+          } else if (button.dataset.action === "stop-watch") {
+            await janus.stopWatching(button.dataset.feedKey);
+            notify("Stopped watching feed.");
+            logEvent("Stopped watching feed", { feed: button.dataset.feedKey });
+          } else if (button.dataset.action === "pause-watch") {
+            await janus.pauseWatching(button.dataset.feedKey);
+            notify("Paused this subscription.");
+            logEvent("Paused watched feed", { feed: button.dataset.feedKey });
+          } else if (button.dataset.action === "resume-watch") {
+            await janus.resumeWatching(button.dataset.feedKey);
+            notify("Resumed this subscription.");
+            logEvent("Resumed watched feed", { feed: button.dataset.feedKey });
+          } else if (button.dataset.action === "toggle-mute") {
+            const muted = janus.toggleFeedMute(button.dataset.feedKey);
+            notify(muted ? "Muted this feed locally." : "Unmuted this feed locally.");
+          } else if (button.dataset.action === "focus-feed") {
+            openFocusFeed(button.dataset.feedKey);
+          } else if (button.dataset.action === "fullscreen-feed") {
+            const tile = button.closest(".media-tile");
+            const video = tile?.querySelector("video") || els.focusVideo;
+            await (video?.requestFullscreen?.() || tile?.requestFullscreen?.());
+          } else if (button.dataset.action === "forward") {
+            const room = Number.parseInt(button.dataset.room, 10);
+            const id = Number.parseInt(button.dataset.id, 10);
+            openForwardTarget(room, id, button.dataset.display || `participant ${id}`);
+          } else if (button.dataset.action === "kick") {
+            const room = Number.parseInt(button.dataset.room, 10);
+            const id = Number.parseInt(button.dataset.id, 10);
+            if (!await confirmAction(`Disconnect ${button.dataset.display || `participant ${id}`} from room ${room}?`)) {
+              return;
+            }
+            const response = await janus.kickParticipant(room, id);
+            notify(`Disconnect requested for ${button.dataset.display || `participant ${id}`}.`);
+            addMediaEvent(`Disconnect requested for ${button.dataset.display || `participant ${id}`} in room ${room}.`);
+            logEvent(`Disconnect requested for ${id}`, response.plugindata?.data || response);
+            await janus.stopWatching(`${room}:${id}`, { disableWatchAll: false }).catch(() => {});
+            await refreshSelectedRoom();
+          }
+          renderFocusedFeed();
+        } catch (error) {
+          notify(`Media action failed: ${error.message}`, "warn");
+          logEvent("Media action failed", error.message);
+        }
+      }
+
+      els.mediaGrid.addEventListener("click", (event) => {
+        handleMediaAction(event.target.closest("button[data-action]"));
+      });
+      els.focusActions.addEventListener("click", (event) => {
+        handleMediaAction(event.target.closest("button[data-action]"));
+      });
+
+      els.forwarderList.addEventListener("click", async (event) => {
+        const button = event.target.closest("button[data-action='stop-forwarder'][data-room][data-publisher][data-stream]");
+        if (!button || !janus) {
+          return;
+        }
+        const room = Number.parseInt(button.dataset.room, 10);
+        const publisherId = Number.parseInt(button.dataset.publisher, 10);
+        const streamId = Number.parseInt(button.dataset.stream, 10);
+        if (!await confirmAction(`Stop RTP forwarder ${streamId}?`)) {
+          return;
+        }
+        try {
+          const response = await janus.stopRtpForward(room, publisherId, streamId);
+          notify(`Stopped RTP forwarder ${streamId}.`);
+          logEvent(`Stopped RTP forwarder ${streamId}`, response.plugindata?.data || response);
+        } catch (error) {
+          notify(`Stop RTP forwarder failed: ${error.message}`, "warn");
+          logEvent("Stop RTP forwarder failed", error.message);
+        }
+      });
+
+      els.clearLogButton.addEventListener("click", () => {
+        els.eventLog.textContent = "";
+        state.trace.eventCount = 0;
+        if (els.eventReadout) {
+          els.eventReadout.textContent = "0";
+        }
+      });
+
+      async function loadConsoleConfig() {
+        try {
+          const response = await fetch("/__attacker-config.json", { cache: "no-store" });
+          if (response.ok) {
+            consoleConfig = await response.json();
+          }
+        } catch {
+          consoleConfig = {};
+        }
+      }
+
+      function defaultFrontendUrl() {
+        if (consoleConfig.frontendUrl) {
+          return consoleConfig.frontendUrl;
+        }
+        if (!["http:", "https:"].includes(window.location.protocol)) {
+          return "";
+        }
+        const url = new URL(window.location.href);
+        if (url.protocol === "https:" && url.port === "8443") {
+          url.port = "";
+          return url.origin;
+        }
+        return window.location.origin;
+      }
+
+      async function initializeConsole() {
+        await loadConsoleConfig();
+        const params = new URLSearchParams(window.location.search);
+        els.createFrontendUrl.value = params.get("frontend") || defaultFrontendUrl();
+        els.createDisplayName.value = params.get("name") || "operator console";
+        els.janusUrl.value = params.get("janus") || "";
+        if (consoleConfig.clientIp && !["127.0.0.1", "::1"].includes(consoleConfig.clientIp)) {
+          els.rtpHost.value = consoleConfig.clientIp;
+        }
+        if (params.has("janus") || params.has("frontend")) {
+          start();
+        }
+      }
+
+      initializeConsole();
+    </script>
+  </body>
+</html>

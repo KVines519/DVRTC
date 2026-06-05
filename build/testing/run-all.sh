@@ -81,6 +81,22 @@ RUN_BAD_AUTH_CHECK="${RUN_BAD_AUTH_CHECK:-1}"
 RUN_DIGESTLEAK_AUTH_CHECK="${RUN_DIGESTLEAK_AUTH_CHECK:-}"
 RUN_DIGESTLEAK_PUBLIC_BLOCK_CHECK="${RUN_DIGESTLEAK_PUBLIC_BLOCK_CHECK:-0}"
 RUN_TRANSPORT_CHECK="${RUN_TRANSPORT_CHECK:-1}"
+
+if [ "${SCENARIO}" = "conferencing1" ]; then
+    echo "[*] Running conferencing1 regression smoke checks"
+    extra_args=""
+    if [ "${CONFERENCING_SKIP_LOCAL_JANUS:-0}" = "1" ]; then
+        extra_args="--skip-local-janus"
+    fi
+    # shellcheck disable=SC2086
+    python3 /opt/testing/scripts/dvrtc-checks.py \
+        smoke \
+        --scenario "${SCENARIO}" \
+        --host "${TARGET_IP}" \
+        ${extra_args}
+    exit 0
+fi
+
 case "${SCENARIO}" in
     pbx2)
         RUN_TURN_CHECK="${RUN_TURN_CHECK:-0}"
@@ -309,6 +325,7 @@ if [ "${RUN_TURN_CHECK}" = "1" ]; then
     TURN_EXPECT_BODY="${TURN_EXPECT_BODY:-shutdown the Internet}"
     TURN_DENY_PEER="${TURN_DENY_PEER:-8.8.8.8}"
     TURN_DENY_PEER_PORT="${TURN_DENY_PEER_PORT:-53}"
+    TURN_TLS_PORT="${TURN_TLS_PORT:-5349}"
 
     echo "[*] Running TURN unauthenticated allocate check"
     python3 /opt/testing/scripts/turn-probe.py \
@@ -333,6 +350,20 @@ if [ "${RUN_TURN_CHECK}" = "1" ]; then
         tcp-http-get \
         --host "${TURN_HOST}" \
         --port "${TURN_PORT}" \
+        --username "${TURN_USER}" \
+        --password "${TURN_PASS}" \
+        --peer "${TURN_PEER}" \
+        --peer-port "${TURN_PEER_PORT}" \
+        --path "${TURN_PATH}" \
+        --expect-status "${TURN_EXPECT_STATUS}" \
+        --expect-body "${TURN_EXPECT_BODY}"
+
+    echo "[*] Running TURN/TLS relay fetch check"
+    python3 /opt/testing/scripts/turn-probe.py \
+        tcp-http-get \
+        --tls \
+        --host "${TURN_HOST}" \
+        --port "${TURN_TLS_PORT}" \
         --username "${TURN_USER}" \
         --password "${TURN_PASS}" \
         --peer "${TURN_PEER}" \

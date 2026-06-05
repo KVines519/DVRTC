@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DVRTC Conferencing1 - BluePill Meetings</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="meet-page">
+      <header class="meet-header">
+        <a class="meet-brand" href="/" aria-label="BluePill Meetings home">
+          <span class="meet-logo" aria-hidden="true"></span>
+          <span class="meet-brand-text">
+            <span>BluePill Meetings</span>
+            <small>Damn Vulnerable Real-Time Communications - conferencing1</small>
+          </span>
+        </a>
+        <div class="meet-meta">
+          <span id="meetingTitle">Room</span>
+          <span id="statusBadge" class="badge">Lobby</span>
+        </div>
+      </header>
+
+      <section class="dvrtc-strip" aria-label="DVRTC lab notice">
+        <strong>DVRTC conferencing1 lab</strong>
+        <span>Intentionally vulnerable for education. Use dedicated lab hosts only.</span>
+        <a href="https://github.com/EnableSecurity/DVRTC">Documentation and exercises on GitHub</a>
+      </section>
+
+      <section id="lobby" class="meet-lobby">
+        <div class="lobby-card">
+          <p class="eyebrow">meeting</p>
+          <h1 id="meetingCodeLabel">Enter your name</h1>
+          <p class="lede">Join the room when you are ready.</p>
+          <form id="joinRoomForm" class="join-card">
+            <label>
+              Your name
+              <input name="displayName" required maxlength="48" autocomplete="name" placeholder="Ada">
+            </label>
+            <button type="submit">Join now</button>
+          </form>
+          <p id="lobbyError" class="error-text" role="alert"></p>
+        </div>
+      </section>
+
+      <section id="meetingRoom" class="call-shell" hidden>
+        <div class="call-stage">
+          <div id="callError" class="call-error" role="alert" hidden></div>
+          <div id="remoteGrid" class="remote-grid"></div>
+          <div class="video-wrap local">
+            <video id="localVideo" autoplay playsinline muted></video>
+            <span>You</span>
+          </div>
+        </div>
+
+        <footer class="call-controls" aria-label="Meeting controls">
+          <div class="call-info">
+            <strong id="participantCount">Just you</strong>
+            <small>Participants</small>
+          </div>
+          <div class="controls">
+            <button id="muteButton" class="control-button" type="button" aria-label="Mute microphone" title="Mute microphone">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>
+              <span class="control-label">Mute</span>
+            </button>
+            <button id="cameraButton" class="control-button" type="button" aria-label="Turn camera off" title="Turn camera off">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><path d="m16 10 6-3v10l-6-3"/></svg>
+              <span class="control-label">Camera</span>
+            </button>
+            <button id="hangupButton" class="control-button danger-control" type="button" aria-label="Leave call" title="Leave call">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8c3.4-1.4 7.4-1.4 10.8 0l1.5.7a2 2 0 0 1 1.1 1.8v1.2a2 2 0 0 1-2 2h-2.4a2 2 0 0 1-2-1.7l-.2-1.1a9.5 9.5 0 0 0-2.8 0l-.2 1.1a2 2 0 0 1-2 1.7H6a2 2 0 0 1-2-2v-1.2a2 2 0 0 1 1.1-1.8l1.5-.7Z"/></svg>
+              <span class="control-label">Leave</span>
+            </button>
+          </div>
+          <details class="meeting-details">
+            <summary aria-label="Meeting details" title="Meeting details">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5h.01"/><path d="M12 10v8"/><path d="M8 10h4"/><circle cx="12" cy="12" r="9"/></svg>
+              <span>Details</span>
+            </summary>
+            <div class="details-panel">
+              <section>
+                <p class="eyebrow">participants</p>
+                <div id="roster" class="roster"></div>
+              </section>
+              <section class="invite-card">
+                <p class="eyebrow">invite</p>
+                <label>
+                  Meeting link
+                  <input id="meetingLinkShare" readonly>
+                </label>
+                <div class="actions compact-actions">
+                  <button id="copyMeetingLinkButton" type="button">Copy link</button>
+                  <button id="copyMeetingInviteButton" type="button">Copy invite</button>
+                </div>
+                <p id="copyMeetingStatus" class="hint"></p>
+              </section>
+            </div>
+          </details>
+        </footer>
+      </section>
+    </main>
+    <script src="/meeting.js"></script>
+  </body>
+</html>

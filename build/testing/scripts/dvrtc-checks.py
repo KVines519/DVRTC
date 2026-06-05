@@ -187,8 +187,14 @@ def _format_hostport(host: str, port: int) -> str:
     return f"{_format_uri_host(host)}:{port}"
 
 
-def _http_url(host: str, path: str) -> str:
-    return f"http://{_format_uri_host(host)}{path}"
+def _http_url(host: str, path: str, port: int | None = None) -> str:
+    suffix = "" if port in (None, 80) else f":{port}"
+    return f"http://{_format_uri_host(host)}{suffix}{path}"
+
+
+def _https_url(host: str, path: str, port: int | None = None) -> str:
+    suffix = "" if port in (None, 443) else f":{port}"
+    return f"https://{_format_uri_host(host)}{suffix}{path}"
 
 
 def _resolve_target(
@@ -287,11 +293,36 @@ def _default_rtp_host(host: str) -> str:
     return _local_ip_for_target("8.8.8.8", 80)
 
 
+def _urlopen_context(url: str) -> ssl.SSLContext | None:
+    if not url.startswith("https://"):
+        return None
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
 def _http_get_text(url: str, timeout: float = 5.0) -> tuple[int, str]:
     request = urllib.request.Request(url, headers={"User-Agent": HTTP_USER_AGENT})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with urllib.request.urlopen(request, timeout=timeout, context=_urlopen_context(url)) as response:
         body = response.read().decode("utf-8", errors="replace")
         return response.getcode(), body
+
+
+def _http_post_json(url: str, payload: dict, timeout: float = 5.0) -> tuple[int, dict]:
+    data = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=data,
+        method="POST",
+        headers={
+            "User-Agent": HTTP_USER_AGENT,
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=timeout, context=_urlopen_context(url)) as response:
+        body = response.read().decode("utf-8", errors="replace")
+        return response.getcode(), json.loads(body or "{}")
 
 
 def _build_register(
@@ -969,8 +1000,88 @@ def _write_sine_wave(path: Path, *, duration: float, sample_rate: int = 8000) ->
             wav_file.writeframes(struct.pack("<h", sample))
 
 
+def cmd_conferencing_smoke(args: argparse.Namespace) -> int:
+    host = args.host
+    http_port = getattr(args, "http_port", 80)
+    https_port = getattr(args, "https_port", 443)
+    janus_http_port = getattr(args, "janus_http_port", 8088)
+    skip_local_janus = bool(getattr(args, "skip_local_janus", False))
+
+    _info("[*] Conferencing smoke: checking frontend /healthz")
+    try:
+        status_code, body = _http_get_text(_http_url(host, "/healthz", http_port), timeout=5.0)
+    except urllib.error.URLError as exc:
+        return _fail(f"frontend /healthz check failed ({exc})")
+    if status_code != 200 or body.strip() != "ok":
+        return _fail(f"frontend /healthz returned unexpected response: HTTP {status_code} {body!r}")
+    _info("    [+] frontend /healthz returned ok")
+
+    for scheme, url in (
+        ("HTTP", _http_url(host, "/", http_port)),
+        ("HTTPS", _https_url(host, "/", https_port)),
+    ):
+        _info(f"[*] Conferencing smoke: checking {scheme} home page")
+        try:
+            status_code, body = _http_get_text(url, timeout=5.0)
+        except urllib.error.URLError as exc:
+            return _fail(f"{scheme} home page check failed ({exc})")
+        if status_code != 200 or "BluePill Meetings" not in body or "DVRTC conferencing1 lab" not in body:
+            return _fail(f"{scheme} home page did not return expected BluePill content")
+        _info(f"    [+] {scheme} home page looks correct")
+
+    if skip_local_janus:
+        _info("[*] Conferencing smoke: skipping local Janus /janus/info check")
+    else:
+        _info("[*] Conferencing smoke: checking local Janus /janus/info")
+        try:
+            status_code, body = _http_get_text(_http_url("127.0.0.1", "/janus/info", janus_http_port), timeout=5.0)
+            parsed = json.loads(body)
+        except (urllib.error.URLError, json.JSONDecodeError) as exc:
+            return _fail(f"local Janus /janus/info check failed ({exc})")
+        if status_code != 200 or parsed.get("janus") != "server_info":
+            return _fail("local Janus /janus/info did not return server_info")
+        _info("    [+] local Janus /janus/info returned server_info")
+
+    _info("[*] Conferencing smoke: creating and joining a test meeting")
+    code = ""
+    try:
+        status_code, created = _http_post_json(_http_url(host, "/api/meetings", http_port), {}, timeout=8.0)
+        if status_code != 201:
+            return _fail(f"meeting create returned HTTP {status_code}")
+        code = str(created.get("meeting", {}).get("code") or "")
+        join_path = str(created.get("joinPath") or "")
+        if not code or join_path != f"/meet/{code}":
+            return _fail(f"meeting create returned unexpected payload: {created}")
+        status_code, joined = _http_post_json(
+            _http_url(host, f"/api/meetings/{code}/join", http_port),
+            {"displayName": "DVRTC Smoke"},
+            timeout=8.0,
+        )
+        if status_code != 200:
+            return _fail(f"meeting join returned HTTP {status_code}")
+        room = joined.get("meeting", {}).get("room")
+        ws_url = str(joined.get("janus", {}).get("websocket") or "")
+        if not isinstance(room, int) or not ws_url.startswith(("ws://", "wss://")):
+            return _fail(f"meeting join returned unexpected payload: {joined}")
+        _info(f"    [+] meeting {code} joined; Janus room {room}; websocket URL returned")
+    except (urllib.error.URLError, json.JSONDecodeError) as exc:
+        return _fail(f"meeting create/join check failed ({exc})")
+    finally:
+        if code and not skip_local_janus:
+            try:
+                _http_post_json(_http_url("127.0.0.1", f"/api/meetings/{code}/cleanup", http_port), {}, timeout=5.0)
+            except Exception:
+                pass
+
+    _info("[+] Conferencing smoke checks passed")
+    return 0
+
+
 def cmd_smoke(args: argparse.Namespace) -> int:
     scenario = getattr(args, "scenario", os.environ.get("SCENARIO", "pbx1"))
+    if scenario == "conferencing1":
+        return cmd_conferencing_smoke(args)
+
     _info("[*] Smoke: checking TCP reachability")
     ports = [80, DEFAULT_SIP_PORT]
     if scenario == "pbx1":
@@ -1790,7 +1901,11 @@ def build_parser() -> argparse.ArgumentParser:
     smoke.add_argument("--host", default="127.0.0.1")
     smoke.add_argument("--mysql-port", type=int, default=23306)
     smoke.add_argument("--extension", default="1000")
-    smoke.add_argument("--scenario", choices=("pbx1", "pbx2"), default=scenario_default)
+    smoke.add_argument("--scenario", choices=("pbx1", "pbx2", "conferencing1"), default=scenario_default)
+    smoke.add_argument("--http-port", type=int, default=80)
+    smoke.add_argument("--https-port", type=int, default=443)
+    smoke.add_argument("--janus-http-port", type=int, default=8088)
+    smoke.add_argument("--skip-local-janus", action="store_true")
     smoke.set_defaults(func=cmd_smoke)
 
     enum = subparsers.add_parser("enum", help="Check SIP extension enumeration")
