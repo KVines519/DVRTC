@@ -9,15 +9,17 @@ import secrets
 import signal
 import string
 import time
+import wave
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable
 
 import aiohttp
-from aiortc import RTCPeerConnection, RTCSessionDescription, RTCRtpSender, VideoStreamTrack
-from aiortc.contrib.media import MediaPlayer
-from av import VideoFrame
+import av
+from aiortc import AudioStreamTrack, RTCPeerConnection, RTCSessionDescription, RTCRtpSender, VideoStreamTrack
+from aiortc.mediastreams import MediaStreamError
+from av import AudioFrame, VideoFrame
 from PIL import Image, ImageDraw, ImageFont
 
 FRONTEND_URL = os.environ.get("BOT_FRONTEND_URL", "http://127.0.0.1:80").rstrip("/")
@@ -133,6 +135,8 @@ class JanusSocket:
         self.waiters: list[tuple[int, Callable[[dict[str, Any]], bool], asyncio.Future]] = []
         self.reader_task: asyncio.Task | None = None
         self.keepalive_task: asyncio.Task | None = None
+        self.failure: Exception | None = None
+        self.closing = False
 
     async def connect(self) -> None:
         self.ws = await self.http.ws_connect(self.url, protocols=("janus-protocol",), heartbeat=30)
@@ -153,8 +157,8 @@ class JanusSocket:
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         self.pending[transaction] = future
-        await self.ws.send_json(payload)
         try:
+            await self.ws.send_json(payload)
             return await asyncio.wait_for(future, timeout=timeout)
         finally:
             self.pending.pop(transaction, None)
@@ -179,8 +183,13 @@ class JanusSocket:
         timeout: float = 15.0,
     ) -> dict[str, Any]:
         waiter = asyncio.create_task(self.wait_for(handle_id, predicate, timeout=timeout))
-        await self.message(handle_id, body, jsep=jsep)
-        return await waiter
+        try:
+            await self.message(handle_id, body, jsep=jsep)
+            return await waiter
+        except BaseException:
+            waiter.cancel()
+            await asyncio.gather(waiter, return_exceptions=True)
+            raise
 
     async def wait_for(
         self,
@@ -199,6 +208,7 @@ class JanusSocket:
                 self.waiters.remove(entry)
 
     async def destroy(self) -> None:
+        self.closing = True
         if self.keepalive_task:
             self.keepalive_task.cancel()
         if self.session_id:
@@ -210,37 +220,193 @@ class JanusSocket:
             await self.ws.close()
         if self.reader_task:
             self.reader_task.cancel()
+        tasks = [task for task in (self.keepalive_task, self.reader_task) if task]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _keepalive(self) -> None:
+        failures = 0
         while True:
             await asyncio.sleep(25)
             try:
                 await self.request({"janus": "keepalive", "session_id": self.session_id}, timeout=3)
+                failures = 0
             except Exception as error:
+                failures += 1
                 log(f"Janus keepalive failed: {error}")
+                if failures >= 2:
+                    self._fail(RuntimeError(f"Janus keepalive failed {failures} times: {error}"))
+                    return
+
+    def _fail(self, error: Exception) -> None:
+        if self.failure is None:
+            self.failure = error
+        for future in list(self.pending.values()):
+            if not future.done():
+                future.set_exception(error)
+        for _, _, waiter in list(self.waiters):
+            if not waiter.done():
+                waiter.set_exception(error)
 
     async def _reader(self) -> None:
         assert self.ws is not None
-        async for message in self.ws:
-            if message.type != aiohttp.WSMsgType.TEXT:
-                continue
-            data = json.loads(message.data)
-            transaction = data.get("transaction")
-            future = self.pending.get(transaction) if transaction else None
-            if future and not future.done():
-                if data.get("janus") == "error":
-                    future.set_exception(RuntimeError(data.get("error", {}).get("reason", "Janus error")))
-                else:
-                    future.set_result(data)
-                continue
+        try:
+            async for message in self.ws:
+                if message.type != aiohttp.WSMsgType.TEXT:
+                    continue
+                data = json.loads(message.data)
+                transaction = data.get("transaction")
+                future = self.pending.get(transaction) if transaction else None
+                if future and not future.done():
+                    if data.get("janus") == "error":
+                        future.set_exception(RuntimeError(data.get("error", {}).get("reason", "Janus error")))
+                    else:
+                        future.set_result(data)
+                    continue
 
-            sender = data.get("sender")
-            if not sender:
+                sender = data.get("sender")
+                if not sender:
+                    continue
+                for handle_id, predicate, waiter in list(self.waiters):
+                    if handle_id == sender and not waiter.done() and predicate(data):
+                        waiter.set_result(data)
+                        break
+            if not self.closing:
+                self._fail(RuntimeError("Janus WebSocket closed"))
+        except Exception as error:
+            if not self.closing:
+                self._fail(error)
+
+
+class LoopingWavAudioTrack(AudioStreamTrack):
+    kind = "audio"
+
+    def __init__(self, path: Path):
+        super().__init__()
+        with wave.open(str(path), "rb") as source:
+            if source.getsampwidth() != 2:
+                raise ValueError(f"Unsupported WAV sample width for {path}: {source.getsampwidth()}")
+            if source.getnchannels() != 1:
+                raise ValueError(f"Unsupported WAV channel count for {path}: {source.getnchannels()}")
+            self.sample_rate = source.getframerate()
+            self.samples_per_frame = max(1, int(self.sample_rate * 0.02))
+            self.audio = source.readframes(source.getnframes())
+        if not self.audio:
+            raise ValueError(f"WAV file is empty: {path}")
+        self.sample_count = len(self.audio) // 2
+        self.position = 0
+        self.timestamp = 0
+        self.start_time: float | None = None
+
+    async def recv(self) -> AudioFrame:
+        if self.readyState != "live":
+            raise MediaStreamError
+
+        now = time.monotonic()
+        if self.start_time is None:
+            self.start_time = now
+        else:
+            wait = self.start_time + (self.timestamp / self.sample_rate) - now
+            await asyncio.sleep(max(0, wait))
+
+        chunk = self._read_samples(self.samples_per_frame)
+        frame = AudioFrame(format="s16", layout="mono", samples=self.samples_per_frame)
+        frame.planes[0].update(chunk)
+        frame.pts = self.timestamp
+        frame.sample_rate = self.sample_rate
+        frame.time_base = Fraction(1, self.sample_rate)
+        self.timestamp += self.samples_per_frame
+        return frame
+
+    def _read_samples(self, count: int) -> bytes:
+        output = bytearray()
+        while count > 0:
+            available = self.sample_count - self.position
+            take = min(count, available)
+            start = self.position * 2
+            output.extend(self.audio[start:start + take * 2])
+            self.position = (self.position + take) % self.sample_count
+            count -= take
+        return bytes(output)
+
+
+class LoopingPacketVideoTrack(VideoStreamTrack):
+    kind = "video"
+
+    def __init__(self, path: Path):
+        super().__init__()
+        self.path = path
+        self.container: av.container.InputContainer | None = None
+        self.stream: av.video.stream.VideoStream | None = None
+        self.packets: Any | None = None
+        self.base_pts: int | None = None
+        self.base_dts: int | None = None
+        self.loop_pts_offset = 0
+        self.loop_dts_offset = 0
+        self.last_pts: int | None = None
+        self.last_dts: int | None = None
+        self.start_time: float | None = None
+        self._open()
+
+    async def recv(self) -> av.Packet:
+        if self.readyState != "live":
+            raise MediaStreamError
+
+        packet = self._next_packet()
+        assert packet.pts is not None and packet.time_base is not None
+        packet_time = float(packet.pts * packet.time_base)
+        now = time.monotonic()
+        if self.start_time is None:
+            self.start_time = now - packet_time
+        else:
+            await asyncio.sleep(max(0, self.start_time + packet_time - now))
+        return packet
+
+    def stop(self) -> None:
+        super().stop()
+        if self.container:
+            self.container.close()
+            self.container = None
+
+    def _open(self) -> None:
+        self.container = av.open(str(self.path))
+        self.stream = self.container.streams.video[0]
+        self.packets = self.container.demux(self.stream)
+        self.base_pts = None
+        self.base_dts = None
+
+    def _next_packet(self) -> av.Packet:
+        while True:
+            try:
+                packet = next(self.packets)
+            except StopIteration:
+                self._next_loop()
                 continue
-            for handle_id, predicate, waiter in list(self.waiters):
-                if handle_id == sender and not waiter.done() and predicate(data):
-                    waiter.set_result(data)
-                    break
+            if not packet.size or packet.pts is None:
+                continue
+            if self.base_pts is None:
+                self.base_pts = packet.pts
+            if packet.dts is not None and self.base_dts is None:
+                self.base_dts = packet.dts
+            packet.pts = packet.pts - self.base_pts + self.loop_pts_offset
+            if packet.dts is not None and self.base_dts is not None:
+                packet.dts = packet.dts - self.base_dts + self.loop_dts_offset
+                self.last_dts = packet.dts
+            self.last_pts = packet.pts
+            return packet
+
+    def _next_loop(self) -> None:
+        if self.last_pts is not None:
+            step = int(self.stream.time_base.denominator / VIDEO_FPS) if self.stream else 3000
+            duration = int(self.stream.duration) if self.stream and self.stream.duration else self.last_pts + step
+            self.loop_pts_offset += max(duration, self.last_pts + step - self.loop_pts_offset)
+        if self.last_dts is not None:
+            step = int(self.stream.time_base.denominator / VIDEO_FPS) if self.stream else 3000
+            duration = int(self.stream.duration) if self.stream and self.stream.duration else self.last_dts + step
+            self.loop_dts_offset += max(duration, self.last_dts + step - self.loop_dts_offset)
+        if self.container:
+            self.container.close()
+        self._open()
 
 
 class NameVideoTrack(VideoStreamTrack):
@@ -305,20 +471,29 @@ class NameVideoTrack(VideoStreamTrack):
         return image
 
 
+async def close_peer_connection(pc: RTCPeerConnection, name: str) -> None:
+    for transceiver in pc.getTransceivers():
+        if transceiver.sender and transceiver.sender.track:
+            transceiver.sender.track.stop()
+    try:
+        await asyncio.wait_for(pc.close(), timeout=5)
+    except Exception as error:
+        log(f"Peer connection close for {name} did not complete cleanly: {error!r}")
+
+
 @dataclass
 class BotSession:
     name: str
     janus: JanusSocket
     handle_id: int
     pc: RTCPeerConnection
-    players: list[MediaPlayer]
 
     async def close(self) -> None:
-        for transceiver in self.pc.getTransceivers():
-            if transceiver.sender and transceiver.sender.track:
-                transceiver.sender.track.stop()
-        await self.pc.close()
-        await self.janus.destroy()
+        await close_peer_connection(self.pc, self.name)
+        try:
+            await asyncio.wait_for(self.janus.destroy(), timeout=5)
+        except Exception as error:
+            log(f"Janus destroy for {self.name} did not complete cleanly: {error!r}")
 
 
 async def publish_bot(http: aiohttp.ClientSession, code: str, participant: dict[str, Any]) -> BotSession:
@@ -339,36 +514,26 @@ async def publish_bot(http: aiohttp.ClientSession, code: str, participant: dict[
         publisher_id = joined.get("plugindata", {}).get("data", {}).get("id")
 
         pc = RTCPeerConnection()
-        players: list[MediaPlayer] = []
         audio_path = Path(participant["audio"])
         has_audio = audio_path.exists()
         if has_audio:
-            player = MediaPlayer(str(audio_path), loop=True)
-            players.append(player)
-            if player.audio:
-                pc.addTrack(player.audio)
+            pc.addTrack(LoopingWavAudioTrack(audio_path))
         else:
             log(f"Audio clip missing for {name}: {audio_path}")
 
         video_path = Path(participant["video"])
         if video_path.exists():
-            # The build pre-renders this as MPEG-TS/H.264. decode=False lets
-            # aiortc forward encoded packets instead of rendering frames in
-            # Python and re-encoding them for WebRTC.
-            video_player = MediaPlayer(str(video_path), loop=True, decode=False)
-            players.append(video_player)
-            if video_player.video:
-                sender = pc.addTrack(video_player.video)
-                transceiver = next((item for item in pc.getTransceivers() if item.sender == sender), None)
-                h264_codecs = [
-                    codec for codec in RTCRtpSender.getCapabilities("video").codecs
-                    if codec.mimeType.lower() == "video/h264"
-                ]
-                if transceiver and h264_codecs:
-                    transceiver.setCodecPreferences(h264_codecs)
+            sender = pc.addTrack(LoopingPacketVideoTrack(video_path))
         else:
             log(f"Video clip missing for {name}: {video_path}; using static fallback")
-            pc.addTrack(NameVideoTrack(name, participant["tint"], VIDEO_WIDTH, VIDEO_HEIGHT, VIDEO_FPS))
+            sender = pc.addTrack(NameVideoTrack(name, participant["tint"], VIDEO_WIDTH, VIDEO_HEIGHT, VIDEO_FPS))
+        transceiver = next((item for item in pc.getTransceivers() if item.sender == sender), None)
+        h264_codecs = [
+            codec for codec in RTCRtpSender.getCapabilities("video").codecs
+            if codec.mimeType.lower() == "video/h264"
+        ]
+        if transceiver and h264_codecs:
+            transceiver.setCodecPreferences(h264_codecs)
 
         offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
@@ -388,11 +553,14 @@ async def publish_bot(http: aiohttp.ClientSession, code: str, participant: dict[
             RTCSessionDescription(sdp=published["jsep"]["sdp"], type=published["jsep"]["type"])
         )
         log(f"{name} joined room {room} as publisher {publisher_id}")
-        return BotSession(name=name, janus=janus, handle_id=handle_id, pc=pc, players=players)
-    except Exception:
+        return BotSession(name=name, janus=janus, handle_id=handle_id, pc=pc)
+    except BaseException:
         if pc:
-            await pc.close()
-        await janus.destroy()
+            await close_peer_connection(pc, name)
+        try:
+            await asyncio.wait_for(janus.destroy(), timeout=5)
+        except Exception as error:
+            log(f"Janus destroy for failed {name} setup did not complete cleanly: {error!r}")
         raise
 
 
@@ -409,6 +577,7 @@ async def run_session(http: aiohttp.ClientSession, stop_event: asyncio.Event) ->
     log(f"  join URL: {PUBLIC_URL}/meet/{code}?autojoin")
 
     sessions: list[BotSession] = []
+    participant_tasks: list[asyncio.Task] = []
     heartbeat_task: asyncio.Task | None = None
     try:
         async def launch_participant(index: int, participant: dict[str, Any]) -> BotSession:
@@ -417,17 +586,25 @@ async def run_session(http: aiohttp.ClientSession, stop_event: asyncio.Event) ->
             # setup makes Neo and Morpheus audibly drift by the negotiation gap.
             if index > 0:
                 await sleep_ms(150 * index)
-            return await publish_bot(http, code, participant)
+            session = await asyncio.wait_for(
+                publish_bot(http, code, participant),
+                timeout=max(5, JOIN_TIMEOUT_MS / 1000),
+            )
+            sessions.append(session)
+            return session
 
-        sessions = await asyncio.gather(*[
-            launch_participant(index, participant)
+        participant_tasks = [
+            asyncio.create_task(launch_participant(index, participant))
             for index, participant in enumerate(PARTICIPANTS)
-        ])
+        ]
+        await asyncio.gather(*participant_tasks)
         heartbeat_task = asyncio.create_task(heartbeat(stop_event))
 
         deadline = time.monotonic() + (CALL_DURATION_MS / 1000)
         while not stop_event.is_set() and time.monotonic() < deadline:
             for session in sessions:
+                if session.janus.failure:
+                    raise RuntimeError(f"{session.name} Janus connection failed: {session.janus.failure}")
                 if session.pc.connectionState in {"closed", "failed", "disconnected"}:
                     raise RuntimeError(f"{session.name} peer connection {session.pc.connectionState}")
             await sleep_ms(HEALTH_INTERVAL_MS)
@@ -435,7 +612,19 @@ async def run_session(http: aiohttp.ClientSession, stop_event: asyncio.Event) ->
     finally:
         if heartbeat_task:
             heartbeat_task.cancel()
-        for session in sessions:
+            await asyncio.gather(heartbeat_task, return_exceptions=True)
+        for task in participant_tasks:
+            if not task.done():
+                task.cancel()
+        if participant_tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*participant_tasks, return_exceptions=True),
+                    timeout=10,
+                )
+            except asyncio.TimeoutError:
+                log(f"Timed out waiting for participant setup tasks to stop in room {code}")
+        for session in list(sessions):
             await session.close()
         await cleanup_meeting(http, code)
         try:
@@ -461,7 +650,7 @@ async def main() -> None:
             try:
                 await run_session(http, stop_event)
             except Exception as error:
-                log(f"Session failed: {error}")
+                log(f"Session failed: {error!r}")
                 try:
                     HEARTBEAT_PATH.unlink()
                 except FileNotFoundError:
