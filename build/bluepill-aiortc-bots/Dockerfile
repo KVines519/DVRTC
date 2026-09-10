@@ -1,9 +1,9 @@
 # DVRTC bluepill-aiortc-bots - lightweight aiortc publishers that occupy a
 # BluePill Meeting room without launching browser engines.
 
-FROM python:3.12-slim-bookworm
+FROM python:3.14.7-slim-trixie@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
         ffmpeg \
@@ -20,7 +20,8 @@ RUN useradd --create-home --shell /usr/sbin/nologin botuser \
 WORKDIR /opt/dvrtc-bluepill-aiortc-bots/app
 
 COPY --chown=botuser:botuser build/bluepill-aiortc-bots/app/requirements.txt /opt/dvrtc-bluepill-aiortc-bots/app/
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip uninstall -y pip
 
 COPY --chown=botuser:botuser build/bluepill-aiortc-bots/app/ /opt/dvrtc-bluepill-aiortc-bots/app/
 COPY --chown=botuser:botuser build/bluepill-aiortc-bots/media/ /opt/dvrtc-bluepill-aiortc-bots/media/

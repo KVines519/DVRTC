@@ -23,7 +23,7 @@ services:
   # Asterisk PBX - Backend call processing
   # INTENTIONALLY VULNERABLE: Weak passwords (1000:1500), no rate limiting, RTP vulnerabilities
   asterisk:
-    image: ghcr.io/enablesecurity/dvrtc/asterisk:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/asterisk:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -48,7 +48,7 @@ services:
   # RTPEngine - Media proxy for RTP/SRTP
   # INTENTIONALLY VULNERABLE: Configured to allow RTP bleed and injection attacks
   rtpengine:
-    image: ghcr.io/enablesecurity/dvrtc/rtpengine:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/rtpengine:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -66,7 +66,7 @@ services:
   # Kamailio - SIP proxy/registrar (front-end)
   # INTENTIONALLY VULNERABLE: Returns detailed responses enabling enumeration, extension 2000 digest leak
   kamailio:
-    image: ghcr.io/enablesecurity/dvrtc/kamailio:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/kamailio:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -101,7 +101,7 @@ services:
   # Baresip Call Generators - Lightweight SIP clients for automated calls
   # Three staggered callers keep extension 1300 busy for RTP bleed demos
   baresip-callgen:
-    image: ghcr.io/enablesecurity/dvrtc/baresip-callgen:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/baresip-callgen:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -122,7 +122,7 @@ services:
         restart: true
 
   baresip-callgen-b:
-    image: ghcr.io/enablesecurity/dvrtc/baresip-callgen:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/baresip-callgen:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -143,7 +143,7 @@ services:
         restart: true
 
   baresip-callgen-c:
-    image: ghcr.io/enablesecurity/dvrtc/baresip-callgen:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/baresip-callgen:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -165,7 +165,7 @@ services:
 
   # Baresip Digest Leak - Registers extension 2000 for digest leak demonstration
   baresip-digestleak:
-    image: ghcr.io/enablesecurity/dvrtc/baresip-digestleak:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/baresip-digestleak:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -178,7 +178,7 @@ services:
   # Nginx - Web server
   # INTENTIONALLY VULNERABLE: Exposes voicemail directory listing and user-agent logs
   nginx:
-    image: ghcr.io/enablesecurity/dvrtc/nginx:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/nginx:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -210,7 +210,7 @@ services:
 
   # Voicemail Cleaner - Prevents disk exhaustion from testing
   voicemailcleaner:
-    image: ghcr.io/enablesecurity/dvrtc/voicemailcleaner:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/voicemailcleaner:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -228,7 +228,7 @@ services:
   certbot:
     logging: *default-logging
     restart: unless-stopped
-    image: certbot/certbot:v5.4.0
+    image: certbot/certbot:v5.8.0
     volumes:
       - type: volume
         source: acme-challenge
@@ -236,17 +236,33 @@ services:
       - type: bind
         source: ./data/certs
         target: /etc/certstore
+      - type: bind
+        source: ./data/letsencrypt
+        target: /etc/letsencrypt
     environment:
       - EMAIL
       - DOMAIN
-    entrypoint: "/bin/sh -c 'trap exit TERM; if [ -z \"$DOMAIN\" ]; then echo \"No domain specified, certbot will not run\"; sleep infinity; fi; while :; do certbot certonly -n -d $DOMAIN --agree-tos --webroot -w /var/www/html --email $EMAIL --deploy-hook \"owner=$$(stat -c %u:%g /etc/certstore) && cp /etc/letsencrypt/live/$DOMAIN/* /etc/certstore && chown $$owner /etc/certstore/* && chmod 644 /etc/certstore/fullchain.pem /etc/certstore/privkey.pem\"; sleep 12h & wait $${!}; done;'"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        trap exit TERM
+        if [ -z "$$DOMAIN" ]; then
+          echo "No domain specified, certbot will not run"
+          sleep infinity
+        fi
+        while :; do
+          certbot certonly -n -d "$$DOMAIN" --agree-tos --webroot -w /var/www/html --email "$$EMAIL" \
+            --deploy-hook 'sh -c '\''owner=$(stat -c %u:%g /etc/certstore) && cp /etc/letsencrypt/live/$$DOMAIN/* /etc/certstore && chown $$owner /etc/certstore/* && chmod 644 /etc/certstore/fullchain.pem /etc/certstore/privkey.pem'\'''
+          sleep 12h & wait $${!}
+        done
 
   # coturn - TURN/STUN server for NAT traversal
   # INTENTIONALLY VULNERABLE: Hardcoded credentials (user:joshua, CLI:coturn)
   coturn:
     logging: *default-logging
     restart: unless-stopped
-    image: coturn/coturn:4.9.0-r0
+    image: coturn/coturn:4.18.0-r0
     network_mode: "host"
     volumes:
       - type: bind
@@ -307,7 +323,7 @@ services:
 
   # MySQL Client - Exports user-agent statistics to JSON
   mysqlclient:
-    image: ghcr.io/enablesecurity/dvrtc/mysqlclient:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/mysqlclient:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -326,7 +342,7 @@ services:
 
   # Database Cleaner - Truncates user-agent table hourly
   dbcleaner:
-    image: ghcr.io/enablesecurity/dvrtc/dbcleaner:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/dbcleaner:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -342,7 +358,7 @@ services:
   # MySQL Database
   # INTENTIONALLY VULNERABLE: Exposed on non-standard port with hardcoded password (kamailiorw)
   db:
-    image: ghcr.io/enablesecurity/dvrtc/db:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/db:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped

@@ -1,6 +1,6 @@
-FROM debian:sid-slim
+FROM debian:sid-slim@sha256:17d1843dae9ca66f1617c1e464f40d06059ccefb0c606e8b54687f253af1684e
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     asterisk \
     asterisk-modules \
     asterisk-core-sounds-en \

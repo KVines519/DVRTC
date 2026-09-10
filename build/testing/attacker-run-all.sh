@@ -18,10 +18,16 @@ if [ "${SCENARIO}" = "conferencing1" ]; then
         testing-run-all "${TARGET_INPUT}" "${TARGET_MYSQL_PORT}"
 fi
 
+digest_leak_check=1
+if [ "${SCENARIO}" = "pbx2" ]; then
+    digest_leak_check=0
+fi
+
 exec env \
     SCENARIO="${SCENARIO}" \
     RUN_CALLGEN_CHECK=0 \
     RUN_DIGESTLEAK_REG_CHECK=0 \
     RUN_DIGESTLEAK_AUTH_CHECK=0 \
     RUN_DIGESTLEAK_PUBLIC_BLOCK_CHECK=1 \
+    RUN_DIGEST_LEAK_CHECK="${digest_leak_check}" \
     testing-run-all "${TARGET_INPUT}" "${TARGET_MYSQL_PORT}"

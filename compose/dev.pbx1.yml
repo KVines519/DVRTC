@@ -16,7 +16,6 @@ services:
         DVRTC_SERVICE: rtpengine
         VCS_REF: ${VCS_REF:-unknown}
         DVRTC_SOURCE: ${DVRTC_SOURCE:-https://github.com/EnableSecurity/DVRTC}
-        RTPENGINE_VERSION: mr10.5.5.1
 
   kamailio:
     build:

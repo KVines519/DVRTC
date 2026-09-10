@@ -14,7 +14,7 @@ x-required-public-ipv4:
 services:
   # Conferencing frontend - tenant-aware web UI, API, and Janus WebSocket proxy
   conferencing-frontend:
-    image: ghcr.io/enablesecurity/dvrtc/conferencing1-frontend:v0.3.0-wip.20260605
+    image: ghcr.io/enablesecurity/dvrtc/conferencing1-frontend:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -52,7 +52,7 @@ services:
 
   # Janus - WebRTC server for the conferencing1 scenario
   janus:
-    image: ghcr.io/enablesecurity/dvrtc/conferencing1-janus:v0.3.0-wip.20260605
+    image: ghcr.io/enablesecurity/dvrtc/conferencing1-janus:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -75,7 +75,7 @@ services:
   # bluepill-bots - lightweight aiortc pair occupying a BluePill Meeting room
   # with looping Matrix-themed audio and generated video.
   bluepill-bots:
-    image: ghcr.io/enablesecurity/dvrtc/conferencing1-bluepill-aiortc-bots:v0.3.0-wip.20260605
+    image: ghcr.io/enablesecurity/dvrtc/conferencing1-bluepill-aiortc-bots:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -107,7 +107,7 @@ services:
   certbot:
     logging: *default-logging
     restart: unless-stopped
-    image: certbot/certbot:v5.4.0
+    image: certbot/certbot:v5.8.0
     depends_on:
       conferencing-frontend:
         condition: service_healthy
@@ -118,6 +118,9 @@ services:
       - type: bind
         source: ./data/certs
         target: /etc/certstore
+      - type: bind
+        source: ./data/letsencrypt
+        target: /etc/letsencrypt
     environment:
       - EMAIL
       - DOMAIN

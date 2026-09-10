@@ -141,10 +141,13 @@ case "$SCENARIO" in
         RUNTIME_SERVICES=(
           conferencing-frontend
           janus
+          bluepill-bots
+          certbot
         )
         BUILD_SERVICES=(
           conferencing-frontend
           janus
+          bluepill-bots
         )
         ;;
     *)

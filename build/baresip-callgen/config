@@ -12,8 +12,8 @@ audio_alert		aufile,/dev/null
 video_source
 video_display
 
-# SIP settings - Use port 0 for random/ephemeral port to avoid conflicts when scaled
-sip_listen		0.0.0.0:0
+# SIP settings - use a loopback-only ephemeral port to avoid host-network conflicts
+sip_listen		127.0.0.1:0
 
 net_af			ipv4
 

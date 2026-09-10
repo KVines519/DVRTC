@@ -19,7 +19,7 @@ services:
   # FreeSWITCH PBX - Backend call processing for pbx2
   # INTENTIONALLY VULNERABLE: Weak password (1000:1500), Lua SQLi demo on 2001 with hidden 9000 access, no rate limiting
   freeswitch:
-    image: ghcr.io/enablesecurity/dvrtc/pbx2-freeswitch:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/pbx2-freeswitch:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -43,7 +43,7 @@ services:
 
   # rtpproxy - Media proxy with unconditional RTP recording for pbx2
   rtpproxy:
-    image: ghcr.io/enablesecurity/dvrtc/pbx2-rtpproxy:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/pbx2-rtpproxy:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -65,7 +65,7 @@ services:
   # OpenSIPS - SIP proxy/registrar for pbx2
   # INTENTIONALLY VULNERABLE: Distinct INVITE outcomes leak extension state; extension 2000 digest leak behavior
   opensips:
-    image: ghcr.io/enablesecurity/dvrtc/pbx2-opensips:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/pbx2-opensips:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -93,7 +93,7 @@ services:
         target: /etc/certstore
 
   baresip-callgen-pbx2:
-    image: ghcr.io/enablesecurity/dvrtc/baresip-callgen:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/baresip-callgen:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -114,7 +114,7 @@ services:
         restart: true
 
   baresip-callgen-b-pbx2:
-    image: ghcr.io/enablesecurity/dvrtc/baresip-callgen:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/baresip-callgen:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -135,7 +135,7 @@ services:
         restart: true
 
   baresip-callgen-c-pbx2:
-    image: ghcr.io/enablesecurity/dvrtc/baresip-callgen:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/baresip-callgen:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -156,7 +156,7 @@ services:
         restart: true
 
   baresip-digestleak-pbx2:
-    image: ghcr.io/enablesecurity/dvrtc/baresip-digestleak:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/baresip-digestleak:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -167,7 +167,7 @@ services:
         restart: true
 
   nginx-pbx2:
-    image: ghcr.io/enablesecurity/dvrtc/nginx:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/nginx:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -196,7 +196,7 @@ services:
       start_period: 10s
 
   recordingscleaner:
-    image: ghcr.io/enablesecurity/dvrtc/voicemailcleaner:v0.2.1
+    image: ghcr.io/enablesecurity/dvrtc/voicemailcleaner:v0.4.0-wip.20260910
     platform: linux/amd64
     logging: *default-logging
     restart: unless-stopped
@@ -220,7 +220,7 @@ services:
   certbot:
     logging: *default-logging
     restart: unless-stopped
-    image: certbot/certbot:v5.4.0
+    image: certbot/certbot:v5.8.0
     volumes:
       - type: volume
         source: acme-challenge
@@ -228,7 +228,23 @@ services:
       - type: bind
         source: ./data/certs
         target: /etc/certstore
+      - type: bind
+        source: ./data/letsencrypt
+        target: /etc/letsencrypt
     environment:
       - EMAIL
       - DOMAIN
-    entrypoint: "/bin/sh -c 'trap exit TERM; if [ -z \"$DOMAIN\" ]; then echo \"No domain specified, certbot will not run\"; sleep infinity; fi; while :; do certbot certonly -n -d $DOMAIN --agree-tos --webroot -w /var/www/html --email $EMAIL --deploy-hook \"owner=$$(stat -c %u:%g /etc/certstore) && cp /etc/letsencrypt/live/$DOMAIN/* /etc/certstore && chown $$owner /etc/certstore/* && chmod 644 /etc/certstore/fullchain.pem /etc/certstore/privkey.pem\"; sleep 12h & wait $${!}; done;'"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        trap exit TERM
+        if [ -z "$$DOMAIN" ]; then
+          echo "No domain specified, certbot will not run"
+          sleep infinity
+        fi
+        while :; do
+          certbot certonly -n -d "$$DOMAIN" --agree-tos --webroot -w /var/www/html --email "$$EMAIL" \
+            --deploy-hook 'sh -c '\''owner=$(stat -c %u:%g /etc/certstore) && cp /etc/letsencrypt/live/$$DOMAIN/* /etc/certstore && chown $$owner /etc/certstore/* && chmod 644 /etc/certstore/fullchain.pem /etc/certstore/privkey.pem'\'''
+          sleep 12h & wait $${!}
+        done

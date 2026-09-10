@@ -1,7 +1,6 @@
-FROM alpine:3.23.3@sha256:59855d3dceb3ae53991193bd03301e082b2a7faa56a514b03527ae0ec2ce3a95
+FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 
-RUN apk add python3
-RUN apk add shadow
+RUN apk upgrade --no-cache && apk add --no-cache python3 shadow
 RUN useradd -u 100 asterisk
 
 COPY voicemail_cleaner.py voicemail_cleaner.py

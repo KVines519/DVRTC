@@ -45,6 +45,7 @@ RUN_RTP_BLEED_CHECK="${RUN_RTP_BLEED_CHECK:-1}"
 RUN_RTP_FLOOD_CHECK="${RUN_RTP_FLOOD_CHECK:-}"
 RUN_SIP_FLOOD_CHECK="${RUN_SIP_FLOOD_CHECK:-1}"
 RUN_OFFLINE_CRACK_CHECK="${RUN_OFFLINE_CRACK_CHECK:-1}"
+RUN_DIGEST_LEAK_CHECK="${RUN_DIGEST_LEAK_CHECK:-1}"
 RUN_FREESWITCH_LUA_SQLI_CHECK="${RUN_FREESWITCH_LUA_SQLI_CHECK:-}"
 
 WEAK_CRED_TIMEOUT="${WEAK_CRED_TIMEOUT:-25}"
@@ -274,29 +275,32 @@ else
     echo "[*] Skipping FreeSWITCH Lua SQLi check (RUN_FREESWITCH_LUA_SQLI_CHECK=${RUN_FREESWITCH_LUA_SQLI_CHECK})"
 fi
 
-echo "[*] Running digest leak check"
-
-DIGEST_OK=0
-DIGEST_OUTPUT=""
 DIGEST_HASH=""
-for ATTEMPT in 1 2 3; do
-    echo "[*] Digest leak attempt ${ATTEMPT}/3"
-    if DIGEST_OUTPUT="$(python3 /opt/testing/scripts/digestleak.py "${TARGET_IP}" "${DIGEST_EXT}" 2>&1)"; then
+if [ "${RUN_DIGEST_LEAK_CHECK}" = "1" ]; then
+    echo "[*] Running digest leak check"
+    DIGEST_OK=0
+    DIGEST_OUTPUT=""
+    for ATTEMPT in 1 2 3; do
+        echo "[*] Digest leak attempt ${ATTEMPT}/3"
+        if DIGEST_OUTPUT="$(python3 /opt/testing/scripts/digestleak.py "${TARGET_IP}" "${DIGEST_EXT}" 2>&1)"; then
+            echo "${DIGEST_OUTPUT}"
+            DIGEST_OK=1
+            DIGEST_HASH="$(printf '%s\n' "${DIGEST_OUTPUT}" | grep '^\$sip\$' | tail -n 1 || true)"
+            break
+        fi
         echo "${DIGEST_OUTPUT}"
-        DIGEST_OK=1
-        DIGEST_HASH="$(printf '%s\n' "${DIGEST_OUTPUT}" | grep '^\$sip\$' | tail -n 1 || true)"
-        break
-    fi
-    echo "${DIGEST_OUTPUT}"
-    sleep 1
-done
+        sleep 1
+    done
 
-[ "${DIGEST_OK}" -eq 1 ] || {
-    echo "[!] Digest leak check failed after 3 attempts"
-    exit 1
-}
+    [ "${DIGEST_OK}" -eq 1 ] || {
+        echo "[!] Digest leak check failed after 3 attempts"
+        exit 1
+    }
+else
+    echo "[*] Skipping digest leak check (RUN_DIGEST_LEAK_CHECK=${RUN_DIGEST_LEAK_CHECK})"
+fi
 
-if [ "${RUN_OFFLINE_CRACK_CHECK}" = "1" ]; then
+if [ "${RUN_DIGEST_LEAK_CHECK}" = "1" ] && [ "${RUN_OFFLINE_CRACK_CHECK}" = "1" ]; then
     [ -n "${DIGEST_HASH}" ] || {
         echo "[!] Offline crack check failed: digest hash line was not captured"
         exit 1

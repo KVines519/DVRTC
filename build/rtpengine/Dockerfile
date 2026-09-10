@@ -1,10 +1,9 @@
-FROM debian:bookworm-slim
-ARG RTPENGINE_VERSION=14.1.1.5
-ARG RTPENGINE_REPO_REL=14.1
+FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
+ARG RTPENGINE_REPO_REL=26.2
 ARG RTPENGINE_KEYRING_DEB=rtpengine-dfx-repo-keyring_1.0_all.deb
 ARG RTPENGINE_KEYRING_SHA256=78fe26f0251138f4e3c749c88dc4df29666c8efe0823858d3a4ab49d2fa2e088
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     wget \
     ca-certificates \
     dpkg \
@@ -17,7 +16,7 @@ RUN wget -q "https://rtpengine.dfx.at/latest/pool/main/r/rtpengine-dfx-repo-keyr
     && echo "${RTPENGINE_KEYRING_SHA256}  /tmp/${RTPENGINE_KEYRING_DEB}" | sha256sum -c - \
     && dpkg -i "/tmp/${RTPENGINE_KEYRING_DEB}" \
     && rm -f "/tmp/${RTPENGINE_KEYRING_DEB}" \
-    && echo "deb [signed-by=/usr/share/keyrings/dfx.at-rtpengine-archive-keyring.gpg] https://rtpengine.dfx.at/${RTPENGINE_REPO_REL} bookworm main" > /etc/apt/sources.list.d/rtpengine.list
+    && echo "deb [signed-by=/usr/share/keyrings/dfx.at-rtpengine-archive-keyring.gpg] https://rtpengine.dfx.at/${RTPENGINE_REPO_REL} trixie main" > /etc/apt/sources.list.d/rtpengine.list
 
 # Create required directory for rtpengine post-install script
 RUN mkdir -p /etc/modprobe.d

@@ -1,8 +1,9 @@
-FROM ubuntu:24.04@sha256:67efaecc0031a612cf7bb3c863407018dbbef0a971f62032b77aa542ac8ac0d2
+FROM ubuntu:26.04@sha256:513c074113a871b51a8d16ab445c88779d6452d937a164fb5cc479f32668a41d
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y nginx libnginx-mod-http-fancyindex curl
+RUN apt-get update && apt-get upgrade -y && apt-get install -y nginx libnginx-mod-http-fancyindex curl \
+  && rm -f /usr/bin/pebble
 
 COPY config/nginx.conf /etc/nginx/nginx.conf
 COPY config/sites-available/default.pbx1 /etc/nginx/sites-available/default.pbx1

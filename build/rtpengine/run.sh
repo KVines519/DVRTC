@@ -30,6 +30,7 @@ fi
 exec rtpengine -f \
     $INTERFACES \
     --listen-ng="127.0.0.1:2223" \
+    --table=-1 \
     --pidfile=/opt/run/rtpengine/ngcp-rtpengine-daemon.pid \
     --port-min=35000 \
     --port-max=40000 \

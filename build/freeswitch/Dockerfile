@@ -1,6 +1,6 @@
-FROM debian:bookworm AS builder
+FROM debian:trixie@sha256:f324c7ff54321e8d9c588493a20244965938ce0aa50bbd1022d38010e9ffc4b1 AS builder
 
-ARG FREESWITCH_VERSION=v1.10.12
+ARG FREESWITCH_VERSION=v1.11.3
 
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     libsqlite3-dev \
     libcurl4-openssl-dev \
-    libpcre3-dev \
+    libpcre2-dev \
     libspeex-dev \
     libspeexdsp-dev \
     libedit-dev \
@@ -25,7 +25,6 @@ RUN apt-get update && apt-get install -y \
     libtiff-dev \
     yasm \
     uuid-dev \
-    libsqlite3-dev \
     zlib1g-dev \
     cmake \
     curl \
@@ -84,13 +83,13 @@ RUN make -j$(nproc) && make install
 # Install sounds
 RUN make sounds-install && make moh-install
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
 
-RUN apt-get update && apt-get install -y \
-    libssl3 \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
+    libssl3t64 \
     libsqlite3-0 \
-    libcurl4 \
-    libpcre3 \
+    libcurl4t64 \
+    libpcre2-8-0 \
     libspeex1 \
     libspeexdsp1 \
     libedit2 \

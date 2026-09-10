@@ -1,8 +1,8 @@
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
 
-ARG OPENSIPS_VERSION=3.6
+ARG OPENSIPS_VERSION=4.0
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     gnupg2 \
     wget \
     ca-certificates \
@@ -11,8 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Add OpenSIPS repository
-RUN wget -qO - https://apt.opensips.org/pubkey.gpg | apt-key add -
-RUN echo "deb https://apt.opensips.org bookworm ${OPENSIPS_VERSION}-releases" > /etc/apt/sources.list.d/opensips.list
+RUN wget -qO- https://apt.opensips.org/pubkey.gpg | gpg --dearmor -o /usr/share/keyrings/opensips.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/opensips.gpg] https://apt.opensips.org bookworm ${OPENSIPS_VERSION}-releases" > /etc/apt/sources.list.d/opensips.list
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     opensips \

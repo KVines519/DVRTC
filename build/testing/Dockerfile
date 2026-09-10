@@ -1,7 +1,7 @@
-FROM python:3.11-slim AS john-builder
+FROM python:3.14.7-slim-trixie@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6 AS john-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
-ARG JOHN_REF=b2cbb7da85c9652e1df1e37f2691647bd6bfc0de
+ARG JOHN_REF=9a336d800a091bec9650c29282485145f31c9ffc
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -35,10 +35,10 @@ RUN git init /tmp/john \
     && /opt/john/run/john --list=formats 2>/dev/null | grep -q "SIP" \
     && rm -rf /tmp/john
 
-FROM python:3.11-slim AS sqlmap-builder
+FROM python:3.14.7-slim-trixie@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6 AS sqlmap-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
-ARG SQLMAP_REF=39b8ff4bec7c739973060835c3adaf7bac7447e4
+ARG SQLMAP_REF=5f6c303f8aaeb588402ef2f61197e2a67e0da10b
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -55,14 +55,15 @@ RUN git init /tmp/sqlmap \
     && mv /tmp/sqlmap /opt/sqlmap \
     && rm -rf /opt/sqlmap/.git
 
-FROM python:3.11-slim
+FROM python:3.14.7-slim-trixie@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6
 
 ENV DEBIAN_FRONTEND=noninteractive
-ARG SIPVICIOUS_VERSION=0.3.7
+ARG SIPVICIOUS_VERSION=0.3.8
 ARG SCAPY_VERSION=2.7.0
-ARG WEBSOCKETS_VERSION=16.0
+ARG WEBSOCKETS_VERSION=17.1
 
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         openssl \
@@ -84,7 +85,7 @@ RUN apt-get update \
 
 # Add Kamailio repository for kamcmd (BINRPC client) and install baresip
 RUN wget -qO- https://deb.kamailio.org/kamailiodebkey.gpg | gpg --dearmor -o /usr/share/keyrings/kamailio.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/kamailio.gpg] http://deb.kamailio.org/kamailio61 bookworm main" > /etc/apt/sources.list.d/kamailio.list \
+    && echo "deb [signed-by=/usr/share/keyrings/kamailio.gpg] http://deb.kamailio.org/kamailio61 trixie main" > /etc/apt/sources.list.d/kamailio.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends kamailio baresip-core \
     && rm -rf /var/lib/apt/lists/*
@@ -92,7 +93,8 @@ RUN wget -qO- https://deb.kamailio.org/kamailiodebkey.gpg | gpg --dearmor -o /us
 RUN pip install --no-cache-dir \
     "sipvicious==${SIPVICIOUS_VERSION}" \
     "scapy==${SCAPY_VERSION}" \
-    "websockets==${WEBSOCKETS_VERSION}"
+    "websockets==${WEBSOCKETS_VERSION}" \
+    && pip uninstall -y pip
 
 COPY --from=john-builder /opt/john/run /opt/john/run
 COPY --from=john-builder /opt/john/john-wrapper /usr/local/bin/john

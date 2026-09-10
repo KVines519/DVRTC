@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="$REPO_ROOT/.env"
 CERTSTORE="$REPO_ROOT/data/certs"
+LETSENCRYPT_STORE="$REPO_ROOT/data/letsencrypt"
 TMP_COMPOSE="$(mktemp "${TMPDIR:-/tmp}/dvrtc-certbot.XXXXXX.yml")"
 
 cleanup() {
@@ -45,7 +46,7 @@ rsa_key_size=4096
 email=$EMAIL
 staging=0 # Set to 1 if you're testing your setup to avoid hitting request limits
 
-mkdir -p "$CERTSTORE"
+mkdir -p "$CERTSTORE" "$LETSENCRYPT_STORE"
 
 host_uid=$(id -u)
 host_gid=$(id -g)
@@ -53,11 +54,14 @@ host_gid=$(id -g)
 cat > "$TMP_COMPOSE" <<EOF
 services:
   certbot:
-    image: certbot/certbot:v5.4.0
+    image: certbot/certbot:v5.8.0
     volumes:
       - type: bind
         source: $CERTSTORE
         target: /etc/certstore
+      - type: bind
+        source: $LETSENCRYPT_STORE
+        target: /etc/letsencrypt
 EOF
 
 set_runtime_cert_permissions() {

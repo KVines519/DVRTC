@@ -1,10 +1,10 @@
-FROM debian:bookworm-slim
+FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     ca-certificates \
     python3 \
     python3-pip \
-    && python3 -m pip install --break-system-packages --no-cache-dir mysql-connector-python \
+    && python3 -m pip install --break-system-packages --no-cache-dir mysql-connector-python==26.7.0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY run.sh /run.sh

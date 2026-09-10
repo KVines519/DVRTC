@@ -40,7 +40,7 @@ host_gid=$(id -g)
 cat > "$TMP_COMPOSE" <<EOF
 services:
   certbot:
-    image: certbot/certbot:v5.4.0
+    image: certbot/certbot:v5.8.0
     volumes:
       - type: bind
         source: $CERTSTORE
